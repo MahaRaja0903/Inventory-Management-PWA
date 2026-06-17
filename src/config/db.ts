@@ -1,34 +1,42 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
-import { User } from "../models/User";
+import { User as UserClass } from "../models/User";
 import { Settings } from "../models/Settings";
 
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/aquariustattoo";
 
+let isConnected = false;
+
 export async function connectDB() {
+  if (isConnected) {
+    return;
+  }
+
   try {
-    await mongoose.connect(MONGODB_URI);
+    const db = await mongoose.connect(MONGODB_URI);
+    isConnected = db.connections[0].readyState === 1;
     console.log("Connected to MongoDB successfully");
     await seedDB();
   } catch (error) {
     console.error("MongoDB connection error:", error);
-    process.exit(1);
+    // In serverless, we don't want to exit the process, 
+    // just let the current request fail so it can retry later.
   }
 }
 
 async function seedDB() {
   try {
-    const User = mongoose.model("User");
-    const Inventory = mongoose.model("Inventory");
-    const Customer = mongoose.model("Customer");
-    const Sale = mongoose.model("Sale");
-    const Expense = mongoose.model("Expense");
-    const Notification = mongoose.model("Notification");
+    const UserModel = mongoose.model("User");
+    const InventoryModel = mongoose.model("Inventory");
+    const CustomerModel = mongoose.model("Customer");
+    const SaleModel = mongoose.model("Sale");
+    const ExpenseModel = mongoose.model("Expense");
+    const NotificationModel = mongoose.model("Notification");
 
-    const userCount = await User.countDocuments();
+    const userCount = await UserModel.countDocuments();
     let adminId = "";
     let employeeId = "";
 
@@ -37,7 +45,7 @@ async function seedDB() {
       const adminPasswordHash = bcrypt.hashSync("Test@123", salt);
       const employeePasswordHash = bcrypt.hashSync("Test@123", salt);
 
-      const users = await User.create([
+      const users = await UserModel.create([
         {
           name: "Admin Manager",
           email: "admin@gmail.com",
@@ -57,19 +65,19 @@ async function seedDB() {
           profileImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
         }
       ]);
-      adminId = users[0]._id.toString();
-      employeeId = users[1]._id.toString();
+      adminId = (users[0] as any)._id.toString();
+      employeeId = (users[1] as any)._id.toString();
       console.log("Database seeded with default accounts.");
     } else {
-      const admin = await User.findOne({ role: "Admin" });
-      const emp = await User.findOne({ role: "Employee" });
-      adminId = admin?._id.toString() || "";
-      employeeId = emp?._id.toString() || "";
+      const admin = await UserModel.findOne({ role: "Admin" });
+      const emp = await UserModel.findOne({ role: "Employee" });
+      adminId = (admin as any)?._id?.toString() || "";
+      employeeId = (emp as any)?._id?.toString() || "";
     }
 
     // Seed Inventory
-    if (await Inventory.countDocuments() === 0) {
-      await Inventory.create([
+    if (await InventoryModel.countDocuments() === 0) {
+      await InventoryModel.create([
         { itemName: "Black Ink (Aura Eclipse)", category: "Inks", quantity: 12, purchasePrice: 15.0, supplier: "Inkwell Suppliers", createdBy: adminId },
         { itemName: "Red Radiant Ink 30ml", category: "Inks", quantity: 2, purchasePrice: 18.0, supplier: "Radiant Colors", createdBy: adminId },
         { itemName: "Disposable Needles 3RL", category: "Needles", quantity: 150, purchasePrice: 0.25, supplier: "Precision Corp", createdBy: adminId },
@@ -80,33 +88,33 @@ async function seedDB() {
 
     // Seed Customers
     let marianneId = "";
-    if (await Customer.countDocuments() === 0) {
-      const customers = await Customer.create([
+    if (await CustomerModel.countDocuments() === 0) {
+      const customers = await CustomerModel.create([
         { name: "Marianne Vance", mobile: "555-0155", email: "marianne@vance.com", address: "42 Ocean Drive", totalVisits: 0, totalSpending: 0 },
         { name: "John Doe", mobile: "555-0144", email: "john.doe@gmail.com", address: "782 Main Street", totalVisits: 0, totalSpending: 0 }
       ]);
-      marianneId = customers[0]._id.toString();
+      marianneId = (customers[0] as any)._id.toString();
       console.log("Customers seeded.");
     }
 
     // Seed Sales (This will also update customer spending via model hooks)
-    if (await Sale.countDocuments() === 0 && marianneId) {
+    if (await SaleModel.countDocuments() === 0 && marianneId) {
       const { Sale: SaleClass } = await import("../models/Sale");
       await SaleClass.create({ customerId: marianneId, employeeId, serviceType: "Tattoo", amount: 300, discount: 20, paymentMethod: "UPI" });
       console.log("Sales seeded.");
     }
 
     // Seed Expenses
-    if (await Expense.countDocuments() === 0) {
-      await Expense.create([
+    if (await ExpenseModel.countDocuments() === 0) {
+      await ExpenseModel.create([
         { title: "Surgical Gloves Refill", category: "Sanitation", amount: 85.0, date: new Date().toISOString().split("T")[0], status: "Approved", employeeId, approvedBy: adminId }
       ]);
       console.log("Expenses seeded.");
     }
 
     // Seed Notifications
-    if (await Notification.countDocuments() === 0) {
-      await Notification.create({ title: "Welcome to Aquarius", description: "System migration to MongoDB complete.", type: "success" });
+    if (await NotificationModel.countDocuments() === 0) {
+      await NotificationModel.create({ title: "Welcome to Aquarius", description: "System migration to MongoDB complete.", type: "success" });
     }
 
     // Ensure default settings

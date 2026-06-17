@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { AuthUser, Customer, Sale, User } from "../types";
+import React, { useState, useEffect } from "react";
+import { AuthUser, Customer, Sale, User, InventoryItem, SaleItem } from "../types";
 import { apiFetch } from "../lib/api";
-import { Receipt, Search, Plus, Trash2, X, Sparkles, Check, CheckCircle2, UserCheck, DollarSign } from "lucide-react";
+import { Receipt, Search, Plus, Trash2, X, Sparkles, Check, CheckCircle2, UserCheck, DollarSign, Package } from "lucide-react";
 
 interface SalesViewProps {
   user: AuthUser;
@@ -12,6 +12,7 @@ export default function SalesView({ user }: SalesViewProps) {
   const [sales, setSales] = useState<Sale[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [staff, setStaff] = useState<User[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form Fields
@@ -22,6 +23,11 @@ export default function SalesView({ user }: SalesViewProps) {
   const [discount, setDiscount] = useState("0");
   const [paymentMethod, setPaymentMethod] = useState<any>("UPI");
 
+  // Items Used logic
+  const [itemsUsed, setItemsUsed] = useState<SaleItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [selectedItemQty, setSelectedItemQty] = useState("1");
+
   // Custom portfolio details fields if linked to client
   const [tattooDetails, setTattooDetails] = useState("");
   const [piercingDetails, setPiercingDetails] = useState("");
@@ -29,13 +35,15 @@ export default function SalesView({ user }: SalesViewProps) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [salesData, customerData, staffData] = await Promise.all([
+      const [salesData, customerData, staffData, invData] = await Promise.all([
         apiFetch<Sale[]>("/sales"),
         apiFetch<Customer[]>("/customers"),
-        apiFetch<User[]>("/employees")
+        apiFetch<User[]>("/employees"),
+        apiFetch<InventoryItem[]>("/inventory")
       ]);
       setSales(salesData);
       setCustomers(customerData);
+      setInventory(invData.filter(i => i.quantity > 0));
       // Filter active employees list
       setStaff(staffData.filter(s => s.role === "Employee" || s.role === "Admin"));
     } catch {
@@ -48,6 +56,31 @@ export default function SalesView({ user }: SalesViewProps) {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const addItemToSale = () => {
+    if (!selectedItemId) return;
+    const invItem = inventory.find(i => i._id === selectedItemId);
+    if (!invItem) return;
+
+    const existing = itemsUsed.find(i => i.itemId === selectedItemId);
+    if (existing) {
+      setItemsUsed(itemsUsed.map(i => i.itemId === selectedItemId 
+        ? { ...i, quantity: i.quantity + Number(selectedItemQty) } 
+        : i));
+    } else {
+      setItemsUsed([...itemsUsed, { 
+        itemId: invItem._id, 
+        itemName: invItem.itemName, 
+        quantity: Number(selectedItemQty) 
+      }]);
+    }
+    setSelectedItemId("");
+    setSelectedItemQty("1");
+  };
+
+  const removeItemFromSale = (id: string) => {
+    setItemsUsed(itemsUsed.filter(i => i.itemId !== id));
+  };
 
   const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +96,7 @@ export default function SalesView({ user }: SalesViewProps) {
       amount: Number(amount),
       discount: Number(discount),
       paymentMethod,
+      itemsUsed,
       tattooDetails: serviceType === "Tattoo" ? tattooDetails : undefined,
       piercingDetails: serviceType === "Piercing" ? piercingDetails : undefined
     };
@@ -80,6 +114,7 @@ export default function SalesView({ user }: SalesViewProps) {
       setTattooDetails("");
       setPiercingDetails("");
       setPaymentMethod("UPI");
+      setItemsUsed([]);
 
       alert("Sales transaction logged successfully!");
       await fetchData();
@@ -229,6 +264,63 @@ export default function SalesView({ user }: SalesViewProps) {
               </div>
             )}
 
+            {/* Inventory Items Used section */}
+            <div className="space-y-3 bg-slate-950/30 p-4 rounded-xl border border-slate-800/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Package className="w-4 h-4 text-brand-gold" />
+                <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">Inventory Items Used</h4>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedItemId}
+                  onChange={(e) => setSelectedItemId(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white"
+                >
+                  <option value="">Select Studio Supply...</option>
+                  {inventory.map(item => (
+                    <option key={item._id} value={item._id}>{item.itemName} (Stock: {item.quantity})</option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={selectedItemQty}
+                    onChange={(e) => setSelectedItemQty(e.target.value)}
+                    className="w-20 px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={addItemToSale}
+                    className="px-4 py-2 bg-ui-card border border-brand-gold/20 text-brand-gold hover:bg-brand-gold/10 rounded-lg text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                  >
+                    Add Item
+                  </button>
+                </div>
+              </div>
+
+              {itemsUsed.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {itemsUsed.map(item => (
+                    <div key={item.itemId} className="flex items-center justify-between bg-ui-dark border border-ui-border p-2 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-white font-medium">{item.itemName}</span>
+                        <span className="text-[10px] bg-brand-gold/10 text-brand-gold px-1.5 py-0.5 rounded font-bold">x{item.quantity}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItemFromSale(item.itemId)}
+                        className="text-slate-500 hover:text-red-400 cursor-pointer p-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <div>
                 <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Payment Method Channels</label>
@@ -309,6 +401,16 @@ export default function SalesView({ user }: SalesViewProps) {
                   <h4 className="text-xs font-bold text-white mt-1.5">{sale.customerName || "Walk-In Client"}</h4>
                   <div className="text-[10px] text-slate-400 space-y-0.5 font-sans mt-0.5">
                     <span>Artist: <strong className="text-slate-300">{sale.employeeName}</strong></span>
+                    {sale.itemsUsed && sale.itemsUsed.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {sale.itemsUsed.map((i: any) => (
+                          <span key={i.itemId} className="text-[8px] bg-slate-800 text-slate-400 px-1 py-0.5 rounded flex items-center gap-1 border border-slate-700/50">
+                            <Package className="w-2.5 h-2.5" />
+                            {i.itemName} x{i.quantity}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <span className="block text-[9px] text-slate-500 font-mono">Channel: {sale.paymentMethod}</span>
                   </div>
                 </div>

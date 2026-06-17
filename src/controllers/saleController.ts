@@ -4,6 +4,7 @@ import { Customer } from "../models/Customer";
 import { CustomerHistory } from "../models/CustomerHistory";
 import { Notification } from "../models/Notification";
 import { User } from "../models/User";
+import { Inventory } from "../models/Inventory";
 
 export async function getSales(req: Request, res: Response): Promise<void> {
   try {
@@ -46,7 +47,7 @@ export async function getSale(req: Request, res: Response): Promise<void> {
 
 export async function createSale(req: Request, res: Response): Promise<void> {
   const user = (req as any).user;
-  const { customerId, serviceType, amount, discount, paymentMethod, tattooDetails, piercingDetails, employeeId } = req.body;
+  const { customerId, serviceType, amount, discount, paymentMethod, tattooDetails, piercingDetails, employeeId, itemsUsed } = req.body;
 
   if (!serviceType || amount === undefined) {
     res.status(400).json({ message: "Service Type and Amount are required fields" });
@@ -62,8 +63,22 @@ export async function createSale(req: Request, res: Response): Promise<void> {
       serviceType,
       amount: Number(amount),
       discount: discount !== undefined ? Number(discount) : 0,
-      paymentMethod: paymentMethod || "UPI"
+      paymentMethod: paymentMethod || "UPI",
+      itemsUsed: itemsUsed || []
     });
+
+    // Reduce inventory stock
+    if (itemsUsed && Array.isArray(itemsUsed)) {
+      for (const item of itemsUsed) {
+        const invItem = await Inventory.findById(item.itemId);
+        if (invItem) {
+          const newQty = Math.max(0, invItem.quantity - item.quantity);
+          await Inventory.findByIdAndUpdate(item.itemId, { quantity: newQty });
+
+          // If stock becomes low or out, we could trigger a notification here later
+        }
+      }
+    }
 
     // Check if customer ID exists - if yes, create a corresponding history record!
     if (customerId) {

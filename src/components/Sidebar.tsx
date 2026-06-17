@@ -43,14 +43,16 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
   return (
     <>
       {/* HEADER / NAVIGATION BAR (For Mobiles) */}
-      <div id="mobile-topbar" className={`md:hidden w-full ${theme === "dark" ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"} border-b h-16 px-4 flex items-center justify-between sticky top-0 z-30 select-none transition-colors`}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded bg-gradient-to-tr from-amber-500 to-yellow-500 flex items-center justify-center font-bold text-slate-950 text-sm">
-            AQ
-          </div>
+      <div id="mobile-topbar" className={`md:hidden w-full ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-white border-slate-200"} border-b h-16 px-4 flex items-center justify-between sticky top-0 z-30 select-none transition-colors`}>
+        <div className="flex items-center gap-3">
+          <img 
+            src="/logo.jpeg" 
+            alt="Aquarius Logo" 
+            className="w-10 h-10 rounded-lg object-cover shadow-lg shadow-brand-gold/10"
+          />
           <div>
             <h1 className={`text-sm font-bold ${theme === "dark" ? "text-white" : "text-slate-900"} uppercase tracking-tight`}>Aquarius</h1>
-            <span className="text-[9px] text-amber-500 tracking-wider block -mt-1 font-semibold">TATTOO WORKSPACE</span>
+            <span className="text-[9px] text-brand-gold tracking-wider block -mt-1 font-semibold">TATTOO WORKSPACE</span>
           </div>
         </div>
 
@@ -59,7 +61,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
           <button 
             onClick={toggleTheme}
             className={`p-1.5 rounded-full border cursor-pointer transition-colors ${
-              theme === "dark" ? "text-slate-400 bg-slate-950 border-slate-800 hover:text-white" : "text-slate-600 bg-slate-50 border-slate-200 hover:text-slate-900"
+              theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border hover:text-brand-gold" : "text-slate-600 bg-slate-50 border-slate-200 hover:text-slate-900"
             }`}
           >
             {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
@@ -67,18 +69,18 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
 
           {/* Notifications Notification */}
           <button onClick={toggleNotifications} className={`relative p-1.5 rounded-full border cursor-pointer transition-colors ${
-            theme === "dark" ? "text-slate-400 bg-slate-950 border-slate-800" : "text-slate-600 bg-slate-50 border-slate-200"
+            theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border" : "text-slate-600 bg-slate-50 border-slate-200"
           }`}>
             <Bell className="w-5 h-5" />
             {notificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-brand-gold text-ui-dark font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
                 {notificationsCount}
               </span>
             )}
           </button>
 
           <button onClick={onLogout} className={`p-1.5 rounded-full border cursor-pointer transition-colors ${
-            theme === "dark" ? "text-slate-400 bg-slate-950 border-slate-800 hover:text-red-400" : "text-slate-600 bg-slate-50 border-slate-200 hover:text-red-500"
+            theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border hover:text-red-400" : "text-slate-600 bg-slate-50 border-slate-200 hover:text-red-500"
           }`} title="Log Out">
             <LogOut className="w-5 h-5" />
           </button>
@@ -86,20 +88,22 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
       </div>
 
       {/* DESKTOP SIDEBAR: Fixed left side */}
-      <aside id="desktop-sidebar" className={`hidden md:flex flex-col w-64 ${theme === "dark" ? "bg-slate-900 border-slate-800/80" : "bg-white border-slate-200"} border-r h-screen sticky top-0 z-20 select-none transition-colors`}>
+      <aside id="desktop-sidebar" className={`hidden md:flex flex-col w-64 ${theme === "dark" ? "bg-ui-card border-ui-border" : "bg-white border-slate-200"} border-r h-screen sticky top-0 z-20 select-none transition-colors`}>
         {/* Brand Header */}
-        <div className={`p-6 border-b ${theme === "dark" ? "border-slate-800/80" : "border-slate-100"} flex items-center gap-3`}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/10">
-            <LayoutDashboard className="w-5 h-5 text-slate-950" />
-          </div>
+        <div className={`p-6 border-b ${theme === "dark" ? "border-ui-border" : "border-slate-100"} flex items-center gap-4`}>
+          <img 
+            src="/logo.jpeg" 
+            alt="Aquarius Logo" 
+            className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-brand-gold/15"
+          />
           <div>
             <h1 className={`text-base font-bold ${theme === "dark" ? "text-white" : "text-slate-900"} tracking-wide uppercase leading-tight`}>Aquarius</h1>
-            <p className="text-amber-500 text-[10px] tracking-[0.2em] font-bold uppercase -mt-0.5">Tattoo Studio</p>
+            <p className="text-brand-gold text-[10px] tracking-[0.2em] font-bold uppercase -mt-0.5">Tattoo Studio</p>
           </div>
         </div>
 
         {/* User Badge Profile Section */}
-        <div className={`p-4 mx-4 my-4 ${theme === "dark" ? "bg-slate-950/80 border-slate-800/50" : "bg-slate-50 border-slate-100"} border rounded-xl flex items-center gap-3`}>
+        <div className={`p-4 mx-4 my-4 ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-slate-50 border-slate-100"} border rounded-xl flex items-center gap-3`}>
           <img
             src={user.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.name}`}
             alt={user.name}
@@ -110,7 +114,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
             <h4 className={`text-xs font-semibold ${theme === "dark" ? "text-white" : "text-slate-900"} truncate leading-snug`}>{user.name}</h4>
             <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full mt-1 ${
               isAdmin 
-                ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" 
+                ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/20" 
                 : (theme === "dark" ? "bg-slate-800 text-slate-400" : "bg-slate-200 text-slate-600")
             }`}>
               {user.role}
@@ -129,11 +133,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
                 onClick={() => setActiveTab(item.id as TabName)}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-colors group ${
                   isSelected
-                    ? "bg-amber-500 text-slate-950 font-bold"
-                    : (theme === "dark" ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")
+                    ? "bg-brand-gold text-ui-dark font-bold"
+                    : (theme === "dark" ? "text-slate-400 hover:bg-ui-dark hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900")
                 }`}
               >
-                <IconComponent className={`w-4 h-4 ${isSelected ? "text-slate-900" : (theme === "dark" ? "text-slate-400 group-hover:text-amber-500" : "text-slate-500 group-hover:text-amber-600")} transition-colors`} />
+                <IconComponent className={`w-4 h-4 ${isSelected ? "text-ui-dark" : (theme === "dark" ? "text-slate-400 group-hover:text-brand-gold" : "text-slate-500 group-hover:text-brand-gold-dark")} transition-colors`} />
                 <span>{item.label}</span>
               </button>
             );
@@ -141,11 +145,11 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
         </nav>
 
         {/* Floating actions, Notifications notification counter + Logout */}
-        <div className={`p-4 border-t ${theme === "dark" ? "border-slate-800/80 bg-slate-950/20" : "border-slate-100 bg-slate-50/30"} space-y-1.5`}>
+        <div className={`p-4 border-t ${theme === "dark" ? "border-ui-border bg-ui-dark/50" : "border-slate-100 bg-slate-50/30"} space-y-1.5`}>
           {/* Theme Toggle Desktop */}
           <button
             onClick={toggleTheme}
-            className={`w-full ${theme === "dark" ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"} text-xs font-medium py-2 px-4 rounded-lg flex items-center gap-3 cursor-pointer transition-colors`}
+            className={`w-full ${theme === "dark" ? "text-slate-400 hover:bg-ui-dark hover:text-brand-gold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"} text-xs font-medium py-2 px-4 rounded-lg flex items-center gap-3 cursor-pointer transition-colors`}
           >
             {theme === "dark" ? (
               <><Sun className="w-4 h-4" /> <span>Light Mode</span></>
@@ -157,14 +161,14 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
           {/* Action to show alerts */}
           <button
             onClick={toggleNotifications}
-            className={`relative w-full ${theme === "dark" ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"} text-xs font-medium py-2 px-4 rounded-lg flex items-center justify-between cursor-pointer transition-colors`}
+            className={`relative w-full ${theme === "dark" ? "text-slate-400 hover:bg-ui-dark hover:text-brand-gold" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"} text-xs font-medium py-2 px-4 rounded-lg flex items-center justify-between cursor-pointer transition-colors`}
           >
             <span className="flex items-center gap-3">
               <Bell className="w-4 h-4" />
               <span>Studio Alerts</span>
             </span>
             {notificationsCount > 0 && (
-              <span className="bg-amber-500 text-slate-950 hover:bg-amber-600 font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/5">
+              <span className="bg-brand-gold text-ui-dark hover:bg-brand-gold-dark font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center shadow-lg shadow-brand-gold/5">
                 {notificationsCount}
               </span>
             )}
@@ -181,7 +185,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
       </aside>
 
       {/* MOBILE BOTTOM NAVIGATION BAR: Sticky footer for portable screens */}
-      <div id="mobile-navigation" className={`md:hidden fixed bottom-0 left-0 right-0 h-16 ${theme === "dark" ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"} border-t grid grid-cols-5 items-center z-30 select-none px-2 shadow-2xl transition-colors`}>
+      <div id="mobile-navigation" className={`md:hidden fixed bottom-0 left-0 right-0 h-16 ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-white border-slate-200"} border-t grid grid-cols-5 items-center z-30 select-none px-2 shadow-2xl transition-colors`}>
         {mobileShortcuts.map((item) => {
           const IconComponent = item.icon;
           const isSelected = activeTab === item.id;
@@ -191,10 +195,10 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
               onClick={() => setActiveTab(item.id as TabName)}
               className="flex flex-col items-center justify-center gap-1 h-full cursor-pointer transition-transform duration-100 active:scale-95"
             >
-              <div className={`p-1.5 rounded-lg ${isSelected ? "bg-amber-500 text-slate-950" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
+              <div className={`p-1.5 rounded-lg ${isSelected ? "bg-brand-gold text-ui-dark" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
                 <IconComponent className="w-4 h-4" />
               </div>
-              <span className={`text-[9px] font-bold ${isSelected ? "text-amber-500" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
+              <span className={`text-[9px] font-bold ${isSelected ? "text-brand-gold" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
                 {item.label}
               </span>
             </button>

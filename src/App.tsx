@@ -135,7 +135,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"} flex flex-col md:flex-row relative transition-colors duration-300`}>
+    <div className={`min-h-screen ${theme === "dark" ? "bg-ui-dark text-slate-100" : "bg-slate-50 text-slate-900"} flex flex-col md:flex-row relative transition-colors duration-300`}>
       {/* Left panel sidebar or mobile navigator */}
       <Sidebar
         activeTab={activeTab}
@@ -153,11 +153,11 @@ export default function App() {
         <div className="absolute top-6 right-8 hidden md:flex items-center gap-4 z-10">
           <button 
             onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            className={`relative p-2 ${theme === "dark" ? "text-slate-400 bg-slate-900 border-slate-800 hover:text-white" : "text-slate-600 bg-white border-slate-200 hover:text-slate-900"} rounded-full border cursor-pointer transition-colors`}
+            className={`relative p-2 ${theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border hover:text-brand-gold" : "text-slate-600 bg-white border-slate-200 hover:text-slate-900"} rounded-full border cursor-pointer transition-colors`}
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-500 text-slate-950 font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-brand-gold text-ui-dark font-bold text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
                 {unreadCount}
               </span>
             )}
@@ -171,31 +171,31 @@ export default function App() {
 
       {/* FLOATING NOTIFICATIONS OVERLAY PANEL */}
       {isNotificationsOpen && (
-        <div className={`fixed inset-0 ${theme === "dark" ? "bg-slate-950/60" : "bg-slate-900/40"} z-50 flex justify-end transition-opacity`}>
+        <div className={`fixed inset-0 ${theme === "dark" ? "bg-ui-dark/80" : "bg-slate-900/40"} z-50 flex justify-end transition-opacity`}>
           {/* Dismiss overlay background */}
           <div className="absolute inset-0" onClick={() => setIsNotificationsOpen(false)} />
 
-          <div className={`relative w-full max-w-md ${theme === "dark" ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"} border-l h-full p-6 flex flex-col justify-between shadow-2xl animate-slideLeft select-none transition-colors`}>
+          <div className={`relative w-full max-w-md ${theme === "dark" ? "bg-ui-card border-ui-border" : "bg-white border-slate-200"} border-l h-full p-6 flex flex-col justify-between shadow-2xl animate-slideLeft select-none transition-colors`}>
             <div>
-              <div className={`flex justify-between items-center pb-4 border-b ${theme === "dark" ? "border-slate-800" : "border-slate-100"}`}>
+              <div className={`flex justify-between items-center pb-4 border-b ${theme === "dark" ? "border-ui-border" : "border-slate-100"}`}>
                 <div className="flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-amber-500" />
+                  <Bell className="w-5 h-5 text-brand-gold" />
                   <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-slate-900"} text-sm uppercase tracking-wider`}>Studio Action Alerts</h3>
                 </div>
                 <button 
                   onClick={() => setIsNotificationsOpen(false)}
-                  className={`${theme === "dark" ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"} p-1 rounded cursor-pointer transition-colors`}
+                  className={`${theme === "dark" ? "text-slate-400 hover:text-brand-gold hover:bg-ui-dark" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"} p-1 rounded cursor-pointer transition-colors`}
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {unreadCount > 0 && (
-                <div className={`${theme === "dark" ? "bg-amber-500/5 border-amber-500/10" : "bg-amber-50/50 border-amber-500/20"} py-2.5 px-3 rounded-lg flex items-center justify-between text-[11px] mt-4`}>
-                  <span className="text-amber-600 font-semibold">{unreadCount} unread system notifications</span>
+                <div className={`${theme === "dark" ? "bg-brand-gold/5 border-brand-gold/10" : "bg-amber-50/50 border-amber-500/20"} py-2.5 px-3 rounded-lg flex items-center justify-between text-[11px] mt-4`}>
+                  <span className={`font-semibold ${theme === "dark" ? "text-brand-gold" : "text-amber-600"}`}>{unreadCount} unread system notifications</span>
                   <button 
                     onClick={handleMarkAllRead}
-                    className="text-amber-500 hover:text-amber-600 font-bold uppercase tracking-wider cursor-pointer text-[10px]"
+                    className="text-brand-gold hover:text-brand-gold-light font-bold uppercase tracking-wider cursor-pointer text-[10px]"
                   >
                     Clear All
                   </button>

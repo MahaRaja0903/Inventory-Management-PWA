@@ -21,14 +21,14 @@ export default defineConfig(() => {
           display: 'standalone',
           icons: [
             {
-              src: 'https://api.dicebear.com/7.x/shapes/svg?seed=Aquarius&backgroundColor=f59e0b',
+              src: '/logo.jpeg',
               sizes: '192x192',
-              type: 'image/svg+xml'
+              type: 'image/jpeg'
             },
             {
-              src: 'https://api.dicebear.com/7.x/shapes/svg?seed=Aquarius&backgroundColor=f59e0b',
+              src: '/logo.jpeg',
               sizes: '512x512',
-              type: 'image/svg+xml'
+              type: 'image/jpeg'
             }
           ]
         }

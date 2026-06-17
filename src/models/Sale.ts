@@ -10,6 +10,11 @@ const saleSchema = new Schema<SaleType>({
   discount: { type: Number, default: 0 },
   finalAmount: { type: Number, default: 0 },
   paymentMethod: { type: String, enum: ["Cash", "Card", "Bank Transfer", "UPI"], default: "UPI" },
+  itemsUsed: [{
+    itemId: { type: String, required: true },
+    itemName: { type: String, required: true },
+    quantity: { type: Number, required: true, default: 1 }
+  }],
   createdAt: { type: String, default: () => new Date().toISOString() }
 });
 

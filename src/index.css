@@ -1,1 +1,31 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-gold: #D4AF37;
+  --color-brand-gold-light: #E5C76B;
+  --color-brand-gold-dark: #B8860B;
+  
+  --color-ui-dark: #050505;
+  --color-ui-card: #0D0D0D;
+  --color-ui-border: #1A1A1A;
+}
+
+@layer base {
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-slideLeft {
+    animation: slideLeft 0.3s ease-out;
+  }
+
+  @keyframes slideLeft {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+}

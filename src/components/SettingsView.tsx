@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { AuthUser, SystemSettings } from "../types";
 import { apiFetch } from "../lib/api";
 import { Settings, Save, ShieldAlert, CheckCircle } from "lucide-react";

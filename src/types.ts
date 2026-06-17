@@ -83,6 +83,12 @@ export interface CustomerHistoryItem {
   serviceDate: string;
 }
 
+export interface SaleItem {
+  itemId: string;
+  itemName: string;
+  quantity: number;
+}
+
 export interface Sale {
   _id: string;
   customerId: string;
@@ -92,6 +98,7 @@ export interface Sale {
   discount: number;
   finalAmount: number;
   paymentMethod: "Cash" | "Card" | "Bank Transfer" | "UPI";
+  itemsUsed: SaleItem[];
   createdAt: string;
 }
 
@@ -114,6 +121,15 @@ export interface SystemSettings {
     studioPhone: string;
     studioAddress: string;
   };
+}
+
+// UI Feedback types
+export type ToastType = "success" | "error" | "info" | "warning";
+
+export interface ToastState {
+  message: string;
+  type: ToastType;
+  visible: boolean;
 }
 
 // Session state types
