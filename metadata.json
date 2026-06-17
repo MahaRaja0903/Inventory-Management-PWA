@@ -1,0 +1,6 @@
+{
+  "name": "Aquarius Tattoo Studio Management System",
+  "description": "A comprehensive, full-stack management system for Aquarius Tattoo Studio, tracking users, inventory, expenses, attendance, customers, sales, reports, and settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
