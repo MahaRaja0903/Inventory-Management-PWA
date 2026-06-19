@@ -9,6 +9,7 @@ import * as saleController from "../controllers/saleController";
 import * as reportController from "../controllers/reportController";
 import * as notificationController from "../controllers/notificationController";
 import * as settingsController from "../controllers/settingsController";
+import * as taskController from "../controllers/taskController";
 
 import { authenticateToken, requireAdmin, requireEmployeeOrAdmin } from "../middleware/auth";
 
@@ -19,6 +20,14 @@ router.post("/auth/login", authController.login);
 router.post("/auth/logout", authController.logout);
 router.post("/auth/refresh", authController.refresh);
 router.get("/auth/profile", authenticateToken, authController.getProfile);
+
+// --- Task Management Routes ---
+router.get("/tasks", authenticateToken, taskController.getTasks);
+router.get("/tasks/my", authenticateToken, taskController.getMyTasks);
+router.post("/tasks", authenticateToken, requireAdmin, taskController.createTask);
+router.put("/tasks/:id/status", authenticateToken, taskController.updateTaskStatus);
+router.put("/tasks/:id", authenticateToken, requireAdmin, taskController.updateTask);
+router.delete("/tasks/:id", authenticateToken, requireAdmin, taskController.deleteTask);
 
 // --- Inventory CRUD (Protections: Viewable by all authenticated, modifications by Admin) ---
 router.get("/inventory", authenticateToken, inventoryController.getInventory);

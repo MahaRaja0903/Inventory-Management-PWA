@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { AuthUser, Sale, Expense, InventoryItem, Attendance } from "../types";
+import { AuthUser, Sale, Expense, InventoryItem, Attendance, Task } from "../types";
 import { apiFetch } from "../lib/api";
-import { TrendingUp, Coins, ClipboardList, AlertTriangle, UserCheck, CalendarDays, ShoppingBag, Plus, Sparkles, LogIn, LogOut, Loader, CheckCircle2 } from "lucide-react";
+import { TrendingUp, Coins, ClipboardList, AlertTriangle, UserCheck, CalendarDays, ShoppingBag, Plus, Sparkles, LogIn, LogOut, Loader, CheckCircle2, ClipboardCheck } from "lucide-react";
 
 interface DashboardViewProps {
   user: AuthUser;
@@ -15,6 +15,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,17 +26,19 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [salesData, expensesData, inventoryData, attendanceData] = await Promise.all([
+      const [salesData, expensesData, inventoryData, attendanceData, tasksData] = await Promise.all([
         apiFetch<Sale[]>("/sales"),
         apiFetch<Expense[]>("/expenses"),
         apiFetch<InventoryItem[]>("/inventory"),
-        apiFetch<Attendance[]>("/attendance")
+        apiFetch<Attendance[]>("/attendance"),
+        apiFetch<Task[]>(isAdmin ? "/tasks" : "/tasks/my")
       ]);
 
       setSales(salesData);
       setExpenses(expensesData);
       setInventory(inventoryData);
       setAttendance(attendanceData);
+      setTasks(tasksData);
 
       // Extract today's attendance for employee
       if (!isAdmin) {
@@ -125,6 +128,16 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
   const myMonthlySalesRevenue = myMonthlySales.reduce((sum, s) => sum + s.finalAmount, 0);
   const myLoggedExpenses = expenses.filter(e => e.employeeId === user.id);
   const mySubmittedPendingCount = myLoggedExpenses.filter(e => e.status === "Pending").length;
+
+  // Task computations for Admin
+  const pendingTasksCount = tasks.filter(t => t.status === "Pending").length;
+  const inProgressTasksCount = tasks.filter(t => t.status === "In Progress").length;
+  const completedTodayCount = tasks.filter(t => t.status === "Completed" && t.updatedAt?.startsWith(todayStr)).length;
+
+  // Task computations for Employee
+  const myPendingTasksCount = tasks.filter(t => t.status === "Pending").length;
+  const myCompletedTasksCount = tasks.filter(t => t.status === "Completed").length;
+  const todayTasksCount = tasks.filter(t => t.dueDate === todayStr).length;
 
   return (
     <div id="dashboard-view-wrapper" className="space-y-8 select-none">
@@ -267,6 +280,27 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
             </div>
           </div>
 
+          {/* Tasks Management widgets */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">Tasks Pending</span>
+              <p className="text-lg sm:text-2xl font-bold text-amber-500">{pendingTasksCount}</p>
+              <span className="text-[10px] text-slate-500 block">Awaiting assignment / start</span>
+            </div>
+            
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">Tasks In Progress</span>
+              <p className="text-lg sm:text-2xl font-bold text-sky-400">{inProgressTasksCount}</p>
+              <span className="text-[10px] text-slate-500 block">Currently being executed</span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">Tasks Completed Today</span>
+              <p className="text-lg sm:text-2xl font-bold text-emerald-400">{completedTodayCount}</p>
+              <span className="text-[10px] text-slate-500 block">Finished operational objectives today</span>
+            </div>
+          </div>
+
           {/* Quick Analytics & Charts Preview with High-craft SVG representations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sales Trends Chart (Custom highly aligned SVG layout) */}
@@ -384,6 +418,27 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                   : "Submit check-in at shift beginning"
                 }
               </span>
+            </div>
+          </div>
+
+          {/* Employee Tasks Widgets */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("my-tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">My Pending Tasks</span>
+              <p className="text-lg sm:text-2xl font-bold text-amber-500">{myPendingTasksCount}</p>
+              <span className="text-[10px] text-slate-500 block">Awaiting execution</span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("my-tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">My Completed Tasks</span>
+              <p className="text-lg sm:text-2xl font-bold text-emerald-400">{myCompletedTasksCount}</p>
+              <span className="text-[10px] text-slate-500 block font-sans">Total tasks resolved</span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors cursor-pointer" onClick={() => setActiveTab("my-tasks")}>
+              <span className="text-xs text-slate-400 font-medium block mb-1">Today's Tasks</span>
+              <p className="text-lg sm:text-2xl font-bold text-sky-400">{todayTasksCount}</p>
+              <span className="text-[10px] text-slate-500 block">Due today</span>
             </div>
           </div>
 

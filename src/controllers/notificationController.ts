@@ -2,9 +2,27 @@ import { Request, Response } from "express";
 import { Notification } from "../models/Notification";
 
 export async function getNotifications(req: Request, res: Response): Promise<void> {
+  const reqUser = (req as any).user;
+  if (!reqUser) {
+    res.status(401).json({ message: "Unauthorized credentials" });
+    return;
+  }
+
   try {
-    const list = await Notification.find();
-    // Sort so newer status notifications show up first
+    let query: any = {};
+    if (reqUser.role === "Admin") {
+      query = {
+        $or: [
+          { userId: reqUser.id },
+          { userId: null },
+          { userId: { $exists: false } }
+        ]
+      };
+    } else {
+      query = { userId: reqUser.id };
+    }
+
+    const list = await Notification.find(query);
     list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.status(200).json(list);
   } catch (error: any) {

@@ -1,7 +1,7 @@
-import { LayoutDashboard, Receipt, Users, CalendarClock, Coins, PackageOpen, UserRoundCog, BarChart3, Settings, LogOut, Menu, X, Bell, Moon, Sun } from "lucide-react";
+import { LayoutDashboard, Receipt, Users, CalendarClock, Coins, PackageOpen, UserRoundCog, BarChart3, Settings, LogOut, Menu, X, Bell, Moon, Sun, ClipboardList, ClipboardCheck } from "lucide-react";
 import { AuthUser } from "../types";
 
-export type TabName = "dashboard" | "sales" | "customers" | "attendance" | "expenses" | "inventory" | "employees" | "reports" | "settings";
+export type TabName = "dashboard" | "tasks" | "my-tasks" | "sales" | "customers" | "attendance" | "expenses" | "inventory" | "employees" | "reports" | "settings";
 
 interface SidebarProps {
   activeTab: TabName;
@@ -19,6 +19,8 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
 
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, role: "Both" },
+    { id: "tasks", label: "Tasks", icon: ClipboardList, role: "Admin" },
+    { id: "my-tasks", label: "My Tasks", icon: ClipboardCheck, role: "Employee" },
     { id: "sales", label: "Sales Log", icon: Receipt, role: "Both" },
     { id: "customers", label: "Client Portfolio", icon: Users, role: "Both" },
     { id: "attendance", label: "Attendance", icon: CalendarClock, role: "Both" },
@@ -29,33 +31,46 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
     { id: "settings", label: "Studio Settings", icon: Settings, role: "Admin" }
   ] as const;
 
-  const visibleItems = menuItems.filter(item => item.role === "Both" || (item.role === "Admin" && isAdmin));
+  const visibleItems = menuItems.filter(item => {
+    if (item.role === "Both") return true;
+    if (item.role === "Admin" && isAdmin) return true;
+    if (item.role === "Employee" && !isAdmin) return true;
+    return false;
+  });
 
   // Determine standard bottom navigation shortcuts on mobile
-  const mobileShortcuts = [
-    { id: "dashboard", label: "Dash", icon: LayoutDashboard },
-    { id: "sales", label: "Sales", icon: Receipt },
-    { id: "customers", label: "Clients", icon: Users },
-    { id: "attendance", label: "Shift", icon: CalendarClock },
-    { id: "expenses", label: "Bills", icon: Coins }
+  const mobileShortcutsRaw = [
+    { id: "dashboard", label: "Dash", icon: LayoutDashboard, role: "Both" },
+    { id: "tasks", label: "Tasks", icon: ClipboardList, role: "Admin" },
+    { id: "my-tasks", label: "My Tasks", icon: ClipboardCheck, role: "Employee" },
+    { id: "sales", label: "Sales", icon: Receipt, role: "Admin" },
+    { id: "customers", label: "Clients", icon: Users, role: "Both" },
+    { id: "attendance", label: "Shift", icon: CalendarClock, role: "Both" },
+    { id: "expenses", label: "Bills", icon: Coins, role: "Employee" }
   ] as const;
+
+  const mobileShortcuts = mobileShortcutsRaw.filter(
+    item => item.role === "Both" || (item.role === "Admin" && isAdmin) || (item.role === "Employee" && !isAdmin)
+  );
 
   return (
     <>
       {/* HEADER / NAVIGATION BAR (For Mobiles) */}
       <div id="mobile-topbar" className={`md:hidden w-full ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-white border-slate-200"} border-b h-16 px-4 flex items-center justify-between sticky top-0 z-30 select-none transition-colors`}>
         <div className="flex items-center gap-3">
-          <img 
-            src="/logo.jpeg" 
-            alt="Aquarius Logo" 
-            className="w-10 h-10 rounded-lg object-cover shadow-lg shadow-brand-gold/10"
-          />
+          <div className="w-10 h-10 rounded-lg overflow-hidden border border-brand-gold/20 shadow-lg shadow-brand-gold/10 relative shrink-0">
+            <img 
+              src="/logo.jpeg" 
+              alt="Aquarius Logo" 
+              className="w-full h-full object-cover scale-[1.25]"
+            />
+          </div>
           <div>
             <h1 className={`text-sm font-bold ${theme === "dark" ? "text-white" : "text-slate-900"} uppercase tracking-tight`}>Aquarius</h1>
             <span className="text-[9px] text-brand-gold tracking-wider block -mt-1 font-semibold">TATTOO WORKSPACE</span>
           </div>
         </div>
-
+ 
         <div className="flex items-center gap-3">
           {/* Theme Toggle Mobile */}
           <button 
@@ -66,7 +81,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
           >
             {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
           </button>
-
+ 
           {/* Notifications Notification */}
           <button onClick={toggleNotifications} className={`relative p-1.5 rounded-full border cursor-pointer transition-colors ${
             theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border" : "text-slate-600 bg-slate-50 border-slate-200"
@@ -78,7 +93,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
               </span>
             )}
           </button>
-
+ 
           <button onClick={onLogout} className={`p-1.5 rounded-full border cursor-pointer transition-colors ${
             theme === "dark" ? "text-slate-400 bg-ui-card border-ui-border hover:text-red-400" : "text-slate-600 bg-slate-50 border-slate-200 hover:text-red-500"
           }`} title="Log Out">
@@ -86,28 +101,30 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
           </button>
         </div>
       </div>
-
+ 
       {/* DESKTOP SIDEBAR: Fixed left side */}
       <aside id="desktop-sidebar" className={`hidden md:flex flex-col w-64 ${theme === "dark" ? "bg-ui-card border-ui-border" : "bg-white border-slate-200"} border-r h-screen sticky top-0 z-20 select-none transition-colors`}>
         {/* Brand Header */}
         <div className={`p-6 border-b ${theme === "dark" ? "border-ui-border" : "border-slate-100"} flex items-center gap-4`}>
-          <img 
-            src="/logo.jpeg" 
-            alt="Aquarius Logo" 
-            className="w-12 h-12 rounded-xl object-cover shadow-lg shadow-brand-gold/15"
-          />
+          <div className="w-12 h-12 rounded-xl overflow-hidden border border-brand-gold/20 shadow-lg shadow-brand-gold/15 relative shrink-0">
+            <img 
+              src="/logo.jpeg" 
+              alt="Aquarius Logo" 
+              className="w-full h-full object-cover scale-[1.25]"
+            />
+          </div>
           <div>
             <h1 className={`text-base font-bold ${theme === "dark" ? "text-white" : "text-slate-900"} tracking-wide uppercase leading-tight`}>Aquarius</h1>
             <p className="text-brand-gold text-[10px] tracking-[0.2em] font-bold uppercase -mt-0.5">Tattoo Studio</p>
           </div>
         </div>
-
+ 
         {/* User Badge Profile Section */}
         <div className={`p-4 mx-4 my-4 ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-slate-50 border-slate-100"} border rounded-xl flex items-center gap-3`}>
           <img
             src={user.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.name}`}
             alt={user.name}
-            className={`w-10 h-10 rounded-lg object-cover ${theme === "dark" ? "bg-slate-850" : "bg-white"}`}
+            className={`w-10 h-10 rounded-lg object-cover shrink-0 ${theme === "dark" ? "bg-slate-850" : "bg-white"}`}
             referrerPolicy="no-referrer"
           />
           <div className="overflow-hidden">
@@ -185,7 +202,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
       </aside>
 
       {/* MOBILE BOTTOM NAVIGATION BAR: Sticky footer for portable screens */}
-      <div id="mobile-navigation" className={`md:hidden fixed bottom-0 left-0 right-0 h-16 ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-white border-slate-200"} border-t grid grid-cols-5 items-center z-30 select-none px-2 shadow-2xl transition-colors`}>
+      <div id="mobile-navigation" className={`md:hidden fixed bottom-0 left-0 right-0 h-20 ${theme === "dark" ? "bg-ui-dark border-ui-border" : "bg-white border-slate-200"} border-t grid grid-cols-5 items-center z-30 select-none px-2 shadow-2xl transition-colors`}>
         {mobileShortcuts.map((item) => {
           const IconComponent = item.icon;
           const isSelected = activeTab === item.id;
@@ -193,12 +210,12 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as TabName)}
-              className="flex flex-col items-center justify-center gap-1 h-full cursor-pointer transition-transform duration-100 active:scale-95"
+              className="flex flex-col items-center justify-center gap-1.5 h-full cursor-pointer transition-transform duration-100 active:scale-95"
             >
-              <div className={`p-1.5 rounded-lg ${isSelected ? "bg-brand-gold text-ui-dark" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
-                <IconComponent className="w-4 h-4" />
+              <div className={`p-2 rounded-lg ${isSelected ? "bg-brand-gold text-ui-dark" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
+                <IconComponent className="w-5.5 h-5.5" />
               </div>
-              <span className={`text-[9px] font-bold ${isSelected ? "text-brand-gold" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
+              <span className={`text-[10px] font-bold tracking-wide ${isSelected ? "text-brand-gold" : (theme === "dark" ? "text-slate-400" : "text-slate-500")}`}>
                 {item.label}
               </span>
             </button>

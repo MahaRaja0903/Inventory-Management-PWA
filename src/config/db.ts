@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import { User as UserClass } from "../models/User";
 import { Settings } from "../models/Settings";
+import { Task as TaskClass } from "../models/Task";
 
 dotenv.config();
 
@@ -11,19 +12,13 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/aquari
 let isConnected = false;
 
 export async function connectDB() {
-  console.log(`[DB] connectDB called. isConnected state: ${isConnected}, Mongoose readyState: ${mongoose.connection.readyState}`);
   if (isConnected && mongoose.connection.readyState === 1) {
-    console.log("[DB] MongoDB already connected.");
     return;
   }
-
-  const maskedURI = MONGODB_URI.replace(/(mongodb(?:\+srv)?:\/\/)([^@]+)@/, "$1****:****@");
-  console.log(`[DB] Attempting to connect to MongoDB at: ${maskedURI}`);
 
   try {
     const db = await mongoose.connect(MONGODB_URI);
     isConnected = db.connections[0].readyState === 1;
-    console.log(`[DB] Connected to MongoDB successfully. ReadyState: ${db.connections[0].readyState}`);
     await seedDB();
   } catch (error) {
     console.error("[DB] MongoDB connection error:", error);

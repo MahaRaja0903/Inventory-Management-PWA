@@ -9,7 +9,10 @@ const settingsSchema = new Schema<SettingsType>({
     studioEmail: { type: String, default: "info@aquariustattoo.com" },
     studioPhone: { type: String, default: "+1 (234) 567-890" },
     studioAddress: { type: String, default: "77 Aquarius Way, Ink City, IC 90210" }
-  }
+  },
+  geofenceEnabled: { type: Boolean, default: false },
+  geofenceLatitude: { type: Number, default: 0 },
+  geofenceLongitude: { type: Number, default: 0 }
 });
 
 settingsSchema.set('toJSON', { virtuals: true, versionKey: false, transform: (doc, ret) => { ret._id = ret._id.toString(); } });

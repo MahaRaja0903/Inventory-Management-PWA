@@ -15,6 +15,7 @@ import InventoryView from "./components/InventoryView";
 import EmployeesView from "./components/EmployeesView";
 import ReportsView from "./components/ReportsView";
 import SettingsView from "./components/SettingsView";
+import TasksView from "./components/TasksView";
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -60,9 +61,21 @@ export default function App() {
     }
   };
 
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await apiFetch(`/notifications/${id}/read`, { method: "PUT" });
+      await fetchNotifications();
+    } catch {
+      console.warn("Could not mark notification as read.");
+    }
+  };
+
   const handleMarkAllRead = async () => {
     try {
-      await apiFetch("/notifications/read", { method: "PUT" });
+      const unreadList = notifications.filter(n => !n.isRead);
+      for (const item of unreadList) {
+        await apiFetch(`/notifications/${item._id}/read`, { method: "PUT" });
+      }
       await fetchNotifications();
     } catch {
       console.warn("Could not mark notifications as read.");
@@ -115,6 +128,9 @@ export default function App() {
             triggerNotificationRefresh={fetchNotifications} 
           />
         );
+      case "tasks":
+      case "my-tasks":
+        return <TasksView user={user} showToast={showToast} />;
       case "sales":
         return <SalesView user={user} showToast={showToast} />;
       case "customers":
@@ -229,10 +245,11 @@ export default function App() {
                     return (
                       <div 
                         key={item._id} 
-                        className={`p-3.5 rounded-lg border text-xs flex items-start gap-2.5 relative leading-relaxed transition-colors ${
+                        onClick={() => !item.isRead && handleMarkAsRead(item._id)}
+                        className={`p-3.5 rounded-lg border text-xs flex items-start gap-2.5 relative leading-relaxed transition-colors cursor-pointer ${
                           item.isRead 
                             ? (theme === "dark" ? "bg-slate-950/40 border-slate-850/80 opacity-70" : "bg-slate-50/50 border-slate-100 opacity-60") 
-                            : (theme === "dark" ? "bg-slate-950 border-slate-800" : "bg-slate-50 border-slate-200")
+                            : (theme === "dark" ? "bg-slate-950 border-slate-800 hover:border-brand-gold/30" : "bg-slate-50 border-slate-200 hover:border-amber-500/30")
                         }`}
                       >
                         {isWarn ? (

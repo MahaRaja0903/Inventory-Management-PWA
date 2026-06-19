@@ -26,10 +26,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[LoginView] Login submit button clicked.");
-    console.log("[LoginView] Current page URL:", window.location.href);
-    console.log("[LoginView] Requesting endpoint:", window.location.origin + "/api/auth/login");
-    console.log("[LoginView] Email payload (password omitted):", email);
 
     if (!email || !password) {
       console.warn("[LoginView] Login halted: missing email or password");
@@ -40,24 +36,42 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setLoading(true);
     setError("");
 
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+          });
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (geoError: any) {
+        console.warn("[LoginView] Failed to acquire client location:", geoError);
+        // Do not crash here; backend decides if location coordinates are strictly required.
+      }
+    } else {
+      console.warn("[LoginView] Geolocation API is not supported by this browser.");
+    }
+
     try {
-      console.log("[LoginView] Executing fetch request...");
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, latitude, longitude })
       });
 
-      console.log(`[LoginView] HTTP response received. Status: ${response.status} (${response.statusText})`);
-
       const text = await response.text();
-      console.log("[LoginView] Raw response text:", text);
 
       let data;
       try {
         data = JSON.parse(text);
       } catch (parseErr) {
-        console.error("[LoginView] Failed to parse response body as JSON. Raw body is printed above.");
+        console.error("[LoginView] Failed to parse response body as JSON. Raw body length:", text.length);
         throw new Error("Invalid response format received from server");
       }
 
@@ -66,7 +80,6 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         throw new Error(data.message || "Invalid authentication credentials");
       }
 
-      console.log("[LoginView] Authentication successful. Writing credentials to local storage.");
       saveAuthentication(data.accessToken, data.refreshToken, data.user);
       onLoginSuccess();
     } catch (err: any) {
@@ -88,11 +101,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-brand-gold-dark via-brand-gold to-brand-gold-light" />
 
         <div className="text-center mb-8">
-          <img 
-            src="/logo.jpeg" 
-            alt="Aquarius Logo" 
-            className="mx-auto w-24 h-24 rounded-2xl shadow-[0_0_20px_rgba(212,175,55,0.15)] mb-4 object-cover border border-brand-gold/20"
-          />
+          <div className="mx-auto w-24 h-24 rounded-2xl overflow-hidden border border-brand-gold/20 shadow-[0_0_20px_rgba(212,175,55,0.15)] mb-4 relative">
+            <img 
+              src="/logo.jpeg" 
+              alt="Aquarius Logo" 
+              className="w-full h-full object-cover scale-[1.25]"
+            />
+          </div>
           <h1 className="text-2xl font-bold tracking-tight text-white uppercase">Aquarius</h1>
           <p className="text-brand-gold text-xs tracking-[0.25em] font-bold uppercase mt-1">Tattoo Studio Management</p>
         </div>

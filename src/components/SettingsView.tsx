@@ -12,14 +12,19 @@ export default function SettingsView({ user }: SettingsViewProps) {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState("");
-
+ 
   // Form Fields
   const [studioName, setStudioName] = useState("");
   const [studioEmail, setStudioEmail] = useState("");
   const [studioPhone, setStudioPhone] = useState("");
   const [studioAddress, setStudioAddress] = useState("");
   const [notificationEnabled, setNotificationEnabled] = useState(true);
-
+  
+  // Geofencing Fields
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [geofenceLatitude, setGeofenceLatitude] = useState<number | string>("");
+  const [geofenceLongitude, setGeofenceLongitude] = useState<number | string>("");
+ 
   const fetchSettings = async () => {
     try {
       setLoading(true);
@@ -30,21 +35,41 @@ export default function SettingsView({ user }: SettingsViewProps) {
       setStudioPhone(data.profileSettings.studioPhone);
       setStudioAddress(data.profileSettings.studioAddress);
       setNotificationEnabled(data.notificationEnabled);
+      setGeofenceEnabled(data.geofenceEnabled || false);
+      setGeofenceLatitude(data.geofenceLatitude !== undefined ? data.geofenceLatitude : "");
+      setGeofenceLongitude(data.geofenceLongitude !== undefined ? data.geofenceLongitude : "");
     } catch {
       console.error("Failed to load setup files.");
     } finally {
       setLoading(false);
     }
   };
-
+ 
   useEffect(() => {
     fetchSettings();
   }, []);
 
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGeofenceLatitude(position.coords.latitude);
+        setGeofenceLongitude(position.coords.longitude);
+      },
+      (err) => {
+        alert("Failed to detect location: " + err.message);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) return;
-
+ 
     const payload = {
       notificationEnabled,
       profileSettings: {
@@ -52,9 +77,12 @@ export default function SettingsView({ user }: SettingsViewProps) {
         studioEmail,
         studioPhone,
         studioAddress
-      }
+      },
+      geofenceEnabled,
+      geofenceLatitude: geofenceLatitude !== "" ? Number(geofenceLatitude) : 0,
+      geofenceLongitude: geofenceLongitude !== "" ? Number(geofenceLongitude) : 0
     };
-
+ 
     try {
       setSuccess("");
       await apiFetch("/settings", {
@@ -161,6 +189,70 @@ export default function SettingsView({ user }: SettingsViewProps) {
               onChange={(e) => setNotificationEnabled(e.target.checked)}
               className="w-5 h-5 text-amber-500 bg-slate-950 border-slate-800 rounded focus:ring-amber-500 disabled:opacity-50 cursor-pointer"
             />
+          </div>
+
+          {/* Geofencing Coordinates Setup */}
+          <div className="border-t border-slate-850 pt-5 mt-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="block text-xs font-semibold text-white">Enable Employee Geofencing</span>
+                <span className="text-[10px] text-slate-500 font-sans block">Restrict Employee logins to when they are within 5 meters of the studio location.</span>
+              </div>
+              <input
+                type="checkbox"
+                disabled={!isAdmin}
+                checked={geofenceEnabled}
+                onChange={(e) => setGeofenceEnabled(e.target.checked)}
+                className="w-5 h-5 text-amber-500 bg-slate-950 border-slate-800 rounded focus:ring-amber-500 disabled:opacity-50 cursor-pointer"
+              />
+            </div>
+
+            {geofenceEnabled && (
+              <div className="bg-slate-950 p-4 border border-slate-800 rounded-xl space-y-3.5 animate-fadeIn">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Coordinates Setup</span>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={handleDetectLocation}
+                      className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-750 text-slate-350 hover:text-white rounded-lg cursor-pointer transition-all hover:bg-slate-850"
+                    >
+                      Detect Current Location
+                    </button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1.5 font-sans">Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      disabled={!isAdmin}
+                      value={geofenceLatitude}
+                      onChange={(e) => setGeofenceLatitude(e.target.value)}
+                      placeholder="e.g. 12.9716"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-750 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1.5 font-sans">Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      disabled={!isAdmin}
+                      value={geofenceLongitude}
+                      onChange={(e) => setGeofenceLongitude(e.target.value)}
+                      placeholder="e.g. 77.5946"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-750 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

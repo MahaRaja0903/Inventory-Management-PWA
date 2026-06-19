@@ -2,8 +2,10 @@ import mongoose, { Schema } from "mongoose";
 import { NotificationItem as NotificationType } from "../types";
 
 const notificationSchema = new Schema<NotificationType>({
+  userId: { type: String, default: null },
   title: { type: String, required: true },
   description: { type: String, default: "" },
+  message: { type: String, default: "" },
   type: { type: String, enum: ["info", "success", "warning", "danger"], default: "info" },
   isRead: { type: Boolean, default: false },
   createdAt: { type: String, default: () => new Date().toISOString() }

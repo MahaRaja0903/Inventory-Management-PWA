@@ -104,11 +104,30 @@ export interface Sale {
 
 export interface NotificationItem {
   _id: string;
+  userId?: string;
   title: string;
   description: string;
+  message?: string;
   type: "info" | "success" | "warning" | "danger";
   isRead: boolean;
   createdAt: string;
+}
+
+export interface Task {
+  _id: string;
+  title: string;
+  description: string;
+  assignedTo: string;
+  assignedToName?: string;
+  assignedBy: string;
+  assignedByName?: string;
+  priority: "Low" | "Medium" | "High";
+  taskType: "Daily Task" | "One Time Task";
+  dueDate: string;
+  status: "Pending" | "In Progress" | "Completed";
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SystemSettings {
@@ -121,6 +140,9 @@ export interface SystemSettings {
     studioPhone: string;
     studioAddress: string;
   };
+  geofenceEnabled?: boolean;
+  geofenceLatitude?: number;
+  geofenceLongitude?: number;
 }
 
 // UI Feedback types

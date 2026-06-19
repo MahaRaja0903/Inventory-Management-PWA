@@ -3,15 +3,25 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { User } from "../models/User";
+import { Settings } from "../models/Settings";
 
 const JWT_SECRET = process.env.JWT_SECRET || "aquarius_tattoo_studio_secret_key_13579";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "aquarius_tattoo_studio_refresh_key_24680";
 
-export async function login(req: Request, res: Response): Promise<void> {
-  const { email, password } = req.body;
+function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Radius of Earth in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
-  console.log(`[Auth] Login attempt initiated for email: ${email}`);
-  console.log(`[Auth] Mongoose readyState: ${mongoose.connection.readyState} (0=disconnected, 1=connected, 2=connecting, 3=disconnecting)`);
+export async function login(req: Request, res: Response): Promise<void> {
+  const { email, password, latitude, longitude } = req.body;
 
   if (!email || !password) {
     console.warn("[Auth] Login rejected: missing email or password");
@@ -20,7 +30,6 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    console.log(`[Auth] Looking up user: ${email.toLowerCase()}`);
     const user = await User.findOne({ email: email.toLowerCase() });
     
     if (!user) {
@@ -29,17 +38,46 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    console.log(`[Auth] User found. Status: ${user.status}, Role: ${user.role}`);
-
     if (user.status === "Inactive") {
       console.warn(`[Auth] Login blocked: account is Inactive for user: ${user.email}`);
       res.status(403).json({ message: "Your account is deactivated. Contact Admin." });
       return;
     }
 
+    // Geofencing verification for employees
+    if (user.role === "Employee") {
+      const systemSettings = await Settings.get();
+      if (systemSettings && systemSettings.geofenceEnabled) {
+        const targetLat = systemSettings.geofenceLatitude;
+        const targetLon = systemSettings.geofenceLongitude;
+
+        if (targetLat !== undefined && targetLon !== undefined && targetLat !== 0 && targetLon !== 0) {
+          if (latitude === undefined || longitude === undefined) {
+            console.warn(`[Auth] Employee login rejected: geofencing enabled but coordinates missing.`);
+            res.status(400).json({ message: "Location permission is required for Employee login. Please enable location services on your device." });
+            return;
+          }
+
+          const distance = getDistanceInMeters(
+            Number(latitude),
+            Number(longitude),
+            Number(targetLat),
+            Number(targetLon)
+          );
+
+          if (distance > 5) {
+            console.warn(`[Auth] Employee login blocked: out of geofence bounds. Distance: ${distance.toFixed(2)} meters.`);
+            res.status(403).json({
+              message: `Access denied. You must be within 5 meters of the studio to log in. (Currently ${distance.toFixed(1)} meters away)`
+            });
+            return;
+          }
+        }
+      }
+    }
+
     // Compare hashed password
     const isMatched = bcrypt.compareSync(password, user.password || "");
-    console.log(`[Auth] Password comparison result: ${isMatched}`);
     if (!isMatched) {
       console.warn(`[Auth] Login failed: password mismatch for user: ${user.email}`);
       res.status(401).json({ message: "Invalid email or password" });
@@ -59,8 +97,6 @@ export async function login(req: Request, res: Response): Promise<void> {
       JWT_REFRESH_SECRET,
       { expiresIn: "7d" }
     );
-
-    console.log(`[Auth] Login successful for user: ${user.email}. Sending response.`);
 
     res.status(200).json({
       message: "Login successful",
