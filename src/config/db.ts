@@ -11,17 +11,23 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/aquari
 let isConnected = false;
 
 export async function connectDB() {
-  if (isConnected) {
+  console.log(`[DB] connectDB called. isConnected state: ${isConnected}, Mongoose readyState: ${mongoose.connection.readyState}`);
+  if (isConnected && mongoose.connection.readyState === 1) {
+    console.log("[DB] MongoDB already connected.");
     return;
   }
+
+  const maskedURI = MONGODB_URI.replace(/(mongodb(?:\+srv)?:\/\/)([^@]+)@/, "$1****:****@");
+  console.log(`[DB] Attempting to connect to MongoDB at: ${maskedURI}`);
 
   try {
     const db = await mongoose.connect(MONGODB_URI);
     isConnected = db.connections[0].readyState === 1;
-    console.log("Connected to MongoDB successfully");
+    console.log(`[DB] Connected to MongoDB successfully. ReadyState: ${db.connections[0].readyState}`);
     await seedDB();
   } catch (error) {
-    console.error("MongoDB connection error:", error);
+    console.error("[DB] MongoDB connection error:", error);
+    isConnected = false;
     // In serverless, we don't want to exit the process, 
     // just let the current request fail so it can retry later.
   }

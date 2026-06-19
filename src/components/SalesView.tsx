@@ -5,9 +5,10 @@ import { Receipt, Search, Plus, Trash2, X, Sparkles, Check, CheckCircle2, UserCh
 
 interface SalesViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: "success" | "error" | "info" | "warning") => void;
 }
 
-export default function SalesView({ user }: SalesViewProps) {
+export default function SalesView({ user, showToast }: SalesViewProps) {
   const isAdmin = user.role === "Admin";
   const [sales, setSales] = useState<Sale[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -85,7 +86,7 @@ export default function SalesView({ user }: SalesViewProps) {
   const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceType || !amount || Number(amount) <= 0) {
-      alert("Please provide the Service Type and a valid active amount.");
+      showToast("Please provide the Service Type and a valid active amount.", "warning");
       return;
     }
 
@@ -116,10 +117,10 @@ export default function SalesView({ user }: SalesViewProps) {
       setPaymentMethod("UPI");
       setItemsUsed([]);
 
-      alert("Sales transaction logged successfully!");
+      showToast("Sales transaction logged successfully!", "success");
       await fetchData();
     } catch (err: any) {
-      alert(err.message || "Failed to registers sale.");
+      showToast(err.message || "Failed to registers sale.", "error");
     }
   };
 

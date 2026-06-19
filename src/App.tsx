@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { clearAuthentication, getRememberedUser, apiFetch } from "./lib/api";
-import { AuthUser, NotificationItem } from "./types";
-import { Bell, X, RefreshCw, CheckCircle2, ShieldAlert } from "lucide-react";
+import { AuthUser, NotificationItem, ToastState, ToastType } from "./types";
+import { Bell, X, RefreshCw, CheckCircle2, ShieldAlert, CheckCircle, Info, AlertTriangle, AlertOctagon } from "lucide-react";
 
 // Views
 import LoginView from "./components/LoginView";
@@ -25,6 +25,16 @@ export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("theme") as "light" | "dark") || "dark";
   });
+
+  // Toast System
+  const [toast, setToast] = useState<ToastState>({ message: "", type: "success", visible: false });
+
+  const showToast = (message: string, type: ToastType = "success") => {
+    setToast({ message, type, visible: true });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, 4000);
+  };
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
@@ -106,21 +116,21 @@ export default function App() {
           />
         );
       case "sales":
-        return <SalesView user={user} />;
+        return <SalesView user={user} showToast={showToast} />;
       case "customers":
-        return <CustomersView user={user} />;
+        return <CustomersView user={user} showToast={showToast} />;
       case "attendance":
-        return <AttendanceView user={user} />;
+        return <AttendanceView user={user} showToast={showToast} />;
       case "expenses":
-        return <ExpensesView user={user} />;
+        return <ExpensesView user={user} showToast={showToast} />;
       case "inventory":
-        return <InventoryView user={user} />;
+        return <InventoryView user={user} showToast={showToast} />;
       case "employees":
-        return <EmployeesView user={user} />;
+        return <EmployeesView user={user} showToast={showToast} />;
       case "reports":
         return <ReportsView user={user} />;
       case "settings":
-        return <SettingsView user={user} />;
+        return <SettingsView user={user} showToast={showToast} />;
       default:
         return (
           <div className="text-slate-400 text-xs text-center py-12">
@@ -262,6 +272,25 @@ export default function App() {
                 Close Panel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE FRIENDLY TOAST SYSTEM */}
+      {toast.visible && (
+        <div className="fixed bottom-20 md:bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-fadeIn select-none pointer-events-none">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border ${
+            toast.type === "success" ? "bg-emerald-950/90 border-emerald-500/30 text-emerald-400" :
+            toast.type === "error" ? "bg-red-950/90 border-red-500/30 text-red-400" :
+            toast.type === "warning" ? "bg-amber-950/90 border-amber-500/30 text-amber-400" :
+            "bg-slate-900/90 border-slate-700/50 text-slate-300"
+          } backdrop-blur-md min-w-[280px] max-w-[90vw]`}>
+            {toast.type === "success" && <CheckCircle className="w-5 h-5 shrink-0" />}
+            {toast.type === "error" && <AlertOctagon className="w-5 h-5 shrink-0" />}
+            {toast.type === "warning" && <AlertTriangle className="w-5 h-5 shrink-0" />}
+            {toast.type === "info" && <Info className="w-5 h-5 shrink-0" />}
+            
+            <span className="text-xs font-bold tracking-tight">{toast.message}</span>
           </div>
         </div>
       )}

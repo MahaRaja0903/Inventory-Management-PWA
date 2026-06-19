@@ -26,7 +26,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[LoginView] Login submit button clicked.");
+    console.log("[LoginView] Current page URL:", window.location.href);
+    console.log("[LoginView] Requesting endpoint:", window.location.origin + "/api/auth/login");
+    console.log("[LoginView] Email payload (password omitted):", email);
+
     if (!email || !password) {
+      console.warn("[LoginView] Login halted: missing email or password");
       setError("Please fill in all credentials");
       return;
     }
@@ -35,21 +41,36 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setError("");
 
     try {
+      console.log("[LoginView] Executing fetch request...");
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      console.log(`[LoginView] HTTP response received. Status: ${response.status} (${response.statusText})`);
+
+      const text = await response.text();
+      console.log("[LoginView] Raw response text:", text);
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error("[LoginView] Failed to parse response body as JSON. Raw body is printed above.");
+        throw new Error("Invalid response format received from server");
+      }
 
       if (!response.ok) {
+        console.warn(`[LoginView] Login request failed with status: ${response.status}`, data);
         throw new Error(data.message || "Invalid authentication credentials");
       }
 
+      console.log("[LoginView] Authentication successful. Writing credentials to local storage.");
       saveAuthentication(data.accessToken, data.refreshToken, data.user);
       onLoginSuccess();
     } catch (err: any) {
+      console.error("[LoginView] Catch block error in login handler:", err);
       setError(err.message || "Authentication connection failed");
     } finally {
       setLoading(false);
