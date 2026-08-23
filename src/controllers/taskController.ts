@@ -1,29 +1,26 @@
 import { Request, Response } from "express";
-import mongoose from "mongoose";
-import { Task } from "../models/Task";
-import { Notification } from "../models/Notification";
-
-const TaskModel = mongoose.model("Task");
-const UserModel = mongoose.model("User");
+import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
 
 // Helper to auto-instantiate Daily Tasks for the current day
 async function syncDailyTasks() {
   try {
     const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     
-    // Find all Daily Tasks (we treat existing daily tasks as templates)
-    const allDailyTasks = await TaskModel.find({ taskType: "Daily Task" }).lean() as any[];
+    const allTasks = await getFrappeDocs("ATS Task");
+    const allDailyTasks = allTasks.filter((t: any) => t.taskType === "Daily Task");
     if (allDailyTasks.length === 0) return;
 
     // Group by title and assignedTo to identify unique templates
     const templates: { [key: string]: any } = {};
     for (const t of allDailyTasks) {
-      const key = `${t.title.trim().toLowerCase()}_${t.assignedTo}`;
+      const key = `${(t.title || "").trim().toLowerCase()}_${t.assignedTo}`;
       if (!templates[key]) {
         templates[key] = t;
       } else {
         // Keep the oldest record as the source template
-        if (new Date(t.createdAt).getTime() < new Date(templates[key].createdAt).getTime()) {
+        const tTime = t.creation ? new Date(t.creation).getTime() : 0;
+        const tmplTime = templates[key].creation ? new Date(templates[key].creation).getTime() : 0;
+        if (tTime < tmplTime) {
           templates[key] = t;
         }
       }
@@ -32,15 +29,14 @@ async function syncDailyTasks() {
     // Ensure there is an instance for today for each template
     for (const key in templates) {
       const template = templates[key];
-      const hasTodayInstance = await TaskModel.findOne({
-        title: template.title,
-        assignedTo: template.assignedTo,
-        taskType: "Daily Task",
-        dueDate: todayStr
-      }).lean();
+      const hasTodayInstance = allDailyTasks.find((t: any) => 
+        t.title === template.title &&
+        t.assignedTo === template.assignedTo &&
+        t.dueDate === todayStr
+      );
 
       if (!hasTodayInstance) {
-        const created = await TaskModel.create({
+        await createFrappeDoc("ATS Task", {
           title: template.title,
           description: template.description,
           assignedTo: template.assignedTo,
@@ -49,20 +45,17 @@ async function syncDailyTasks() {
           taskType: "Daily Task",
           dueDate: todayStr,
           status: "Pending",
-          notes: template.notes || "",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          notes: template.notes || ""
         });
 
         // Notify employee
-        await Notification.create({
+        await createFrappeDoc("ATS Notification", {
           userId: template.assignedTo,
           title: "New Daily Task Active",
           description: `Daily Task: "${template.title}" has been reactivated for today.`,
           message: `Daily Task: "${template.title}" has been reactivated for today.`,
           type: "info",
-          isRead: false,
-          createdAt: new Date().toISOString()
+          isRead: 0
         });
       }
     }
@@ -81,16 +74,18 @@ export async function getTasks(req: Request, res: Response): Promise<void> {
   await syncDailyTasks();
 
   const { employee, status, priority, date } = req.query;
-  const filter: any = {};
-
-  if (employee) filter.assignedTo = employee;
-  if (status) filter.status = status;
-  if (priority) filter.priority = priority;
-  if (date) filter.dueDate = date;
 
   try {
-    const list = await Task.find(filter);
-    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    let list = await getFrappeDocs("ATS Task");
+    
+    if (employee) list = list.filter((t: any) => t.assignedTo === employee);
+    if (status) list = list.filter((t: any) => t.status === status);
+    if (priority) list = list.filter((t: any) => t.priority === priority);
+    if (date) list = list.filter((t: any) => t.dueDate === date);
+
+    list = list.map((doc: any) => ({ ...doc, _id: doc.name }));
+    list.sort((a: any, b: any) => new Date(b.creation || 0).getTime() - new Date(a.creation || 0).getTime());
+    
     res.status(200).json(list);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to retrieve tasks" });
@@ -107,8 +102,11 @@ export async function getMyTasks(req: Request, res: Response): Promise<void> {
   await syncDailyTasks();
 
   try {
-    const list = await Task.find({ assignedTo: reqUser.id });
-    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    let list = await getFrappeDocs("ATS Task");
+    list = list.filter((t: any) => t.assignedTo === reqUser.id);
+    list = list.map((doc: any) => ({ ...doc, _id: doc.name }));
+    list.sort((a: any, b: any) => new Date(b.creation || 0).getTime() - new Date(a.creation || 0).getTime());
+    
     res.status(200).json(list);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to retrieve employee tasks" });
@@ -130,7 +128,7 @@ export async function createTask(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const created = await Task.create({
+    const created = await createFrappeDoc("ATS Task", {
       title,
       description: description || "",
       assignedTo,
@@ -139,20 +137,18 @@ export async function createTask(req: Request, res: Response): Promise<void> {
       taskType: taskType || "One Time Task",
       dueDate,
       status: "Pending",
-      notes: notes || "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      notes: notes || ""
     });
+    created._id = created.name;
 
     // Notify the assigned employee
-    await Notification.create({
+    await createFrappeDoc("ATS Notification", {
       userId: assignedTo,
       title: "New Task Assigned",
       description: `New Task Assigned: ${title}`,
       message: `New Task Assigned: ${title}`,
       type: "info",
-      isRead: false,
-      createdAt: new Date().toISOString()
+      isRead: 0
     });
 
     res.status(201).json({ message: "Task created successfully", task: created });
@@ -177,7 +173,7 @@ export async function updateTaskStatus(req: Request, res: Response): Promise<voi
   }
 
   try {
-    const taskObj = await Task.findById(id);
+    const taskObj = await getFrappeDoc("ATS Task", id);
     if (!taskObj) {
       res.status(404).json({ message: "Task not found" });
       return;
@@ -189,25 +185,27 @@ export async function updateTaskStatus(req: Request, res: Response): Promise<voi
       return;
     }
 
-    const updated = await Task.findByIdAndUpdate(id, { status });
+    const updated = await updateFrappeDoc("ATS Task", id, { status });
+    updated._id = updated.name;
 
     // Notify Admin of employee's status progress update
-    const updaterName = reqUser.name;
+    const updaterName = reqUser.name || reqUser.fullName || "User";
     const adminNotification = {
       title: "Task Status Updated",
       description: `${updaterName} marked "${taskObj.title}" as ${status}`,
       message: `${updaterName} marked "${taskObj.title}" as ${status}`,
-      type: (status === "Completed" ? "success" : "info") as "success" | "info" | "warning" | "danger",
-      isRead: false,
-      createdAt: new Date().toISOString()
+      type: (status === "Completed" ? "success" : "info"),
+      isRead: 0
     };
 
     // Find Admins to notify
-    const admins = await UserModel.find({ role: "Admin" }).lean();
+    const allUsers = await getFrappeDocs("ATS User");
+    const admins = allUsers.filter((u: any) => u.role === "Admin");
+    
     for (const admin of admins) {
-      await Notification.create({
+      await createFrappeDoc("ATS Notification", {
         ...adminNotification,
-        userId: admin._id.toString()
+        userId: admin.name
       });
     }
 
@@ -228,11 +226,12 @@ export async function updateTask(req: Request, res: Response): Promise<void> {
   const updates = req.body;
 
   try {
-    const updated = await Task.findByIdAndUpdate(id, updates);
+    const updated = await updateFrappeDoc("ATS Task", id, updates);
     if (!updated) {
       res.status(404).json({ message: "Task not found" });
       return;
     }
+    updated._id = updated.name;
     res.status(200).json({ message: "Task details updated successfully", task: updated });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update task details" });
@@ -249,11 +248,7 @@ export async function deleteTask(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
 
   try {
-    const success = await Task.findByIdAndDelete(id);
-    if (!success) {
-      res.status(404).json({ message: "Task not found" });
-      return;
-    }
+    await deleteFrappeDoc("ATS Task", id);
     res.status(200).json({ message: "Task deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to delete task" });

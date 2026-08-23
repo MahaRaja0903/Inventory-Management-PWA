@@ -2,10 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import apiRouter from "./src/routes/api";
-import { initDB, connectDB } from "./src/config/db";
-
-// Initialize and Seed JSON-backed database
-initDB();
+import viteConfigFn from "./vite.config.js";
 
 const app = express();
 
@@ -14,10 +11,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Mount API routers
-app.use("/api", async (req, res, next) => {
-  await connectDB();
-  next();
-}, apiRouter);
+app.use("/api", apiRouter);
 
 // Static files channel for receipts/avatars uploads
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -25,8 +19,15 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // Vite routing integration
 if (process.env.NODE_ENV !== "production") {
   const startDevServer = async () => {
+    // Resolve the config function (in case it returns an object or promise)
+    const viteConfig = typeof viteConfigFn === "function" 
+      ? await (viteConfigFn as any)({ command: 'serve', mode: 'development' }) 
+      : viteConfigFn;
+
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      ...viteConfig,
+      configFile: false, // Bypass Vite's internal loader entirely to fix Windows ERR_INVALID_URL_SCHEME
+      server: { ...viteConfig?.server, middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);

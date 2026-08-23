@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-import mongoose from "mongoose";
-import { User } from "../models/User";
-import { Settings } from "../models/Settings";
+import { getFrappeDocs, frappeLogin, getFrappeDoc } from "../config/frappeClient";
 
 const JWT_SECRET = process.env.JWT_SECRET || "aquarius_tattoo_studio_secret_key_13579";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "aquarius_tattoo_studio_refresh_key_24680";
 
+const USER_DOCTYPE = "ATS User";
+const SETTINGS_DOCTYPE = "ATS Settings";
+
 function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // Radius of Earth in meters
+  const R = 6371000;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a =
@@ -24,36 +24,64 @@ export async function login(req: Request, res: Response): Promise<void> {
   const { email, password, latitude, longitude } = req.body;
 
   if (!email || !password) {
-    console.warn("[Auth] Login rejected: missing email or password");
     res.status(400).json({ message: "Email and password are required" });
     return;
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
-    
-    if (!user) {
-      console.warn(`[Auth] Login failed: User not found for email: ${email.toLowerCase()}`);
+    // 1. Try Frappe Native Login first (this handles 'Administrator' and other real users)
+    const isValidFrappeLogin = await frappeLogin(email, password);
+
+    // 2. Fetch User Profile from ATS User Doctype
+    // Using Frappe REST API to search for the user by email
+    const users = await getFrappeDocs(USER_DOCTYPE, { email: email });
+    let user = users.length > 0 ? users[0] : null;
+
+    // Support Administrator fallback if they haven't created an ATS User for the Admin yet
+    if (isValidFrappeLogin && !user && email.toLowerCase() === "administrator") {
+      user = {
+        name: "Administrator",
+        email: "Administrator",
+        role: "Admin",
+        status: "Active",
+        _id: "Administrator"
+      };
+    } else if (!isValidFrappeLogin && !user) {
+      // If neither Frappe login worked nor an ATS User exists
       res.status(401).json({ message: "Invalid email or password" });
       return;
+    } else if (!isValidFrappeLogin && user) {
+       // If Frappe login failed but ATS User exists, we can optionally check the raw password field in ATS User if they didn't create a real Frappe user
+       // Note: In production, they SHOULD be real Frappe users. For now, we fallback to raw check if needed, or just reject.
+       if (user.password !== password) {
+          res.status(401).json({ message: "Invalid email or password" });
+          return;
+       }
     }
 
+    if (!user) {
+       res.status(401).json({ message: "User profile not found." });
+       return;
+    }
+
+    // Map Frappe 'name' to '_id' for frontend compatibility
+    user._id = user.name || user._id;
+
     if (user.status === "Inactive") {
-      console.warn(`[Auth] Login blocked: account is Inactive for user: ${user.email}`);
       res.status(403).json({ message: "Your account is deactivated. Contact Admin." });
       return;
     }
 
     // Geofencing verification for employees
     if (user.role === "Employee") {
-      const systemSettings = await Settings.get();
+      // Get settings (Single DocType in Frappe)
+      const systemSettings = await getFrappeDoc(SETTINGS_DOCTYPE, SETTINGS_DOCTYPE);
       if (systemSettings && systemSettings.geofenceEnabled) {
         const targetLat = systemSettings.geofenceLatitude;
         const targetLon = systemSettings.geofenceLongitude;
 
         if (targetLat !== undefined && targetLon !== undefined && targetLat !== 0 && targetLon !== 0) {
           if (latitude === undefined || longitude === undefined) {
-            console.warn(`[Auth] Employee login rejected: geofencing enabled but coordinates missing.`);
             res.status(400).json({ message: "Location permission is required for Employee login. Please enable location services on your device." });
             return;
           }
@@ -66,7 +94,6 @@ export async function login(req: Request, res: Response): Promise<void> {
           );
 
           if (distance > 5) {
-            console.warn(`[Auth] Employee login blocked: out of geofence bounds. Distance: ${distance.toFixed(2)} meters.`);
             res.status(403).json({
               message: `Access denied. You must be within 5 meters of the studio to log in. (Currently ${distance.toFixed(1)} meters away)`
             });
@@ -76,19 +103,11 @@ export async function login(req: Request, res: Response): Promise<void> {
       }
     }
 
-    // Compare hashed password
-    const isMatched = bcrypt.compareSync(password, user.password || "");
-    if (!isMatched) {
-      console.warn(`[Auth] Login failed: password mismatch for user: ${user.email}`);
-      res.status(401).json({ message: "Invalid email or password" });
-      return;
-    }
-
     // Generate accessToken
     const accessToken = jwt.sign(
       { id: user._id, name: user.name, email: user.email, role: user.role, profileImage: user.profileImage },
       JWT_SECRET,
-      { expiresIn: "1d" } // 1 day remember duration or expiration
+      { expiresIn: "1d" }
     );
 
     // Generate refreshToken
@@ -104,13 +123,13 @@ export async function login(req: Request, res: Response): Promise<void> {
       refreshToken,
       user: {
         id: user._id,
-        name: user.name,
+        name: user.name || user.email, // fallback if name is empty
         email: user.email,
         role: user.role,
         phone: user.phone,
         status: user.status,
         profileImage: user.profileImage,
-        createdAt: user.createdAt
+        createdAt: user.creation
       }
     });
   } catch (error: any) {
@@ -120,7 +139,6 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 export async function logout(req: Request, res: Response): Promise<void> {
-  // Client-side discards token, we send confirmation
   res.status(200).json({ message: "Logout successful, tokens invalidated." });
 }
 
@@ -134,7 +152,14 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 
   try {
     const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as any;
-    const user = await User.findById(decoded.id);
+    
+    let user;
+    if (decoded.id === "Administrator") {
+      user = { _id: "Administrator", name: "Administrator", email: "Administrator", role: "Admin", status: "Active" };
+    } else {
+      user = await getFrappeDoc(USER_DOCTYPE, decoded.id);
+      if (user) user._id = user.name;
+    }
 
     if (!user || user.status === "Inactive") {
       res.status(401).json({ message: "User not found or suspended" });
@@ -170,7 +195,14 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const user = await User.findById(reqUser.id);
+    let user;
+    if (reqUser.id === "Administrator") {
+       user = { _id: "Administrator", name: "Administrator", email: "Administrator", role: "Admin", status: "Active" };
+    } else {
+       user = await getFrappeDoc(USER_DOCTYPE, reqUser.id);
+       if (user) user._id = user.name;
+    }
+
     if (!user) {
       res.status(404).json({ message: "Profile not found" });
       return;
@@ -184,8 +216,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
       phone: user.phone,
       status: user.status,
       profileImage: user.profileImage,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
+      createdAt: user.creation,
+      updatedAt: user.modified
     });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to retrieve profile data" });

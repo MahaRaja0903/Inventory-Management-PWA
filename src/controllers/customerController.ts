@@ -1,12 +1,10 @@
 import { Request, Response } from "express";
-import { Customer } from "../models/Customer";
-import { CustomerHistory } from "../models/CustomerHistory";
-import { User } from "../models/User";
+import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
 
 export async function getCustomers(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Customer.find();
-    res.status(200).json(list);
+    const list = await getFrappeDocs("ATS Customer");
+    res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name })));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load customers" });
   }
@@ -15,21 +13,24 @@ export async function getCustomers(req: Request, res: Response): Promise<void> {
 export async function getCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const customer = await Customer.findById(id);
+    const customer = await getFrappeDoc("ATS Customer", id);
     if (!customer) {
       res.status(404).json({ message: "Customer profile not found" });
       return;
     }
+    customer._id = customer.name;
 
-    // Enrich with their complete portfolio history
-    const history = await CustomerHistory.find({ customerId: id });
-    const users = await User.find();
+    const allHistory = await getFrappeDocs("ATS Customer History");
+    const history = allHistory.filter((h: any) => h.customerId === id);
     
-    const enrichedHistory = history.map(h => {
-      const artist = users.find(u => u._id === h.employeeId);
+    const users = await getFrappeDocs("ATS User");
+    
+    const enrichedHistory = history.map((h: any) => {
+      const artist = users.find((u: any) => u.name === h.employeeId);
       return {
         ...h,
-        employeeName: artist ? artist.name : "Unknown Artist"
+        _id: h.name,
+        employeeName: artist ? (artist.full_name || artist.name_field || artist.name) : "Unknown Artist"
       };
     });
 
@@ -51,13 +52,15 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
   }
 
   try {
-    const existing = await Customer.findOne({ mobile });
+    const allCustomers = await getFrappeDocs("ATS Customer");
+    const existing = allCustomers.find((c: any) => c.mobile === mobile);
     if (existing) {
+      existing._id = existing.name;
       res.status(400).json({ message: "A customer with this mobile number is already registered", customer: existing });
       return;
     }
 
-    const newCustomer = await Customer.create({
+    const newCustomer = await createFrappeDoc("ATS Customer", {
       name,
       mobile,
       email: email || "",
@@ -65,6 +68,8 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
       totalVisits: 0,
       totalSpending: 0
     });
+
+    if (newCustomer) newCustomer._id = newCustomer.name;
 
     res.status(201).json({ message: "Customer created successfully", customer: newCustomer });
   } catch (error: any) {
@@ -75,11 +80,12 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
 export async function updateCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const updated = await Customer.findByIdAndUpdate(id, req.body);
+    const updated = await updateFrappeDoc("ATS Customer", id, req.body);
     if (!updated) {
       res.status(404).json({ message: "Customer record not found" });
       return;
     }
+    updated._id = updated.name;
     res.status(200).json({ message: "Customer profile updated successfully", customer: updated });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update profile" });
@@ -89,14 +95,17 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
 export async function deleteCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const success = await Customer.findByIdAndDelete(id);
+    const success = await deleteFrappeDoc("ATS Customer", id);
     if (!success) {
       res.status(404).json({ message: "Customer record not found" });
       return;
     }
 
-    // Clean up related history entries
-    await CustomerHistory.deleteByCustomer(id);
+    const allHistory = await getFrappeDocs("ATS Customer History");
+    const historyToDelete = allHistory.filter((h: any) => h.customerId === id);
+    for (const h of historyToDelete) {
+      await deleteFrappeDoc("ATS Customer History", h.name);
+    }
 
     res.status(200).json({ message: "Customer and their design history records deleted successfully" });
   } catch (error: any) {

@@ -1,25 +1,38 @@
 import { Request, Response } from "express";
-import { Inventory } from "../models/Inventory";
-import { Notification } from "../models/Notification";
+import {
+  getFrappeDocs,
+  getFrappeDoc,
+  createFrappeDoc,
+  updateFrappeDoc,
+  deleteFrappeDoc
+} from "../config/frappeClient";
+
+// Optionally we can define the DocType names here
+const INVENTORY_DOCTYPE = "ATS Inventory Item";
+const NOTIFICATION_DOCTYPE = "ATS Notification";
 
 export async function getInventory(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Inventory.find();
-    res.status(200).json(list);
+    const list = await getFrappeDocs(INVENTORY_DOCTYPE);
+    
+    // Map Frappe's `name` property to `_id` so the frontend doesn't break
+    const mappedList = list.map(item => ({ ...item, _id: item.name }));
+    
+    res.status(200).json(mappedList);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load inventory" });
   }
 }
 
 export async function getInventoryItem(req: Request, res: Response): Promise<void> {
-  const { id } = req.params;
+  const { id } = req.params; // ID is the 'name' in Frappe
   try {
-    const item = await Inventory.findById(id);
+    const item = await getFrappeDoc(INVENTORY_DOCTYPE, id);
     if (!item) {
       res.status(404).json({ message: "Inventory item not found" });
       return;
     }
-    res.status(200).json(item);
+    res.status(200).json({ ...item, _id: item.name });
   } catch (error: any) {
     res.status(500).json({ message: "Error finding item" });
   }
@@ -29,14 +42,18 @@ export async function createInventoryItem(req: Request, res: Response): Promise<
   const user = (req as any).user;
   try {
     const data = { ...req.body, createdBy: user.id };
-    const newItem = await Inventory.create(data);
+    
+    // Create doc in Frappe
+    const newItem = await createFrappeDoc(INVENTORY_DOCTYPE, data);
+    newItem._id = newItem.name;
 
     // If item is created at 0 stock, notify
     if (newItem.stockStatus === "Out of Stock") {
-      await Notification.create({
+      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
         title: "Item Out of Stock!",
         description: `New inventory item "${newItem.itemName}" was logged with 0 quantity.`,
-        type: "danger"
+        type: "danger",
+        isRead: 0
       });
     }
 
@@ -49,24 +66,30 @@ export async function createInventoryItem(req: Request, res: Response): Promise<
 export async function updateInventoryItem(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const updated = await Inventory.findByIdAndUpdate(id, req.body);
+    // Remove _id from body if it's there to avoid Frappe trying to update the PK
+    const { _id, name, ...updateData } = req.body;
+    
+    const updated = await updateFrappeDoc(INVENTORY_DOCTYPE, id, updateData);
     if (!updated) {
       res.status(404).json({ message: "Item not found" });
       return;
     }
+    updated._id = updated.name;
 
     // Dynamic stock warning trigger
     if (updated.stockStatus === "Low Stock") {
-      await Notification.create({
+      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
         title: "Low Stock Alert",
         description: `Item "${updated.itemName}" has only ${updated.quantity} units left!`,
-        type: "warning"
+        type: "warning",
+        isRead: 0
       });
     } else if (updated.stockStatus === "Out of Stock") {
-      await Notification.create({
+      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
         title: "Out Of Stock Warning",
         description: `Item "${updated.itemName}" is completely out of stock!`,
-        type: "danger"
+        type: "danger",
+        isRead: 0
       });
     }
 
@@ -79,7 +102,7 @@ export async function updateInventoryItem(req: Request, res: Response): Promise<
 export async function deleteInventoryItem(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const success = await Inventory.findByIdAndDelete(id);
+    const success = await deleteFrappeDoc(INVENTORY_DOCTYPE, id);
     if (!success) {
       res.status(404).json({ message: "Item not found" });
       return;

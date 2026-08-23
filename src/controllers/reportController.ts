@@ -1,13 +1,11 @@
 import { Request, Response } from "express";
-import { Sale } from "../models/Sale";
-import { Expense } from "../models/Expense";
-import { Inventory } from "../models/Inventory";
-import { Attendance } from "../models/Attendance";
-import { User } from "../models/User";
+import { getFrappeDocs } from "../config/frappeClient";
+
+const mapDoc = (doc: any) => ({ ...doc, _id: doc.name });
 
 export async function getDailySales(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Sale.find();
+    const list = await getFrappeDocs("ATS Sale");
     
     // Aggregate by last 30 days
     const dailyMap: { [date: string]: { count: number, revenue: number, discount: number } } = {};
@@ -20,15 +18,15 @@ export async function getDailySales(req: Request, res: Response): Promise<void> 
       dailyMap[dateStr] = { count: 0, revenue: 0, discount: 0 };
     }
 
-    list.forEach(sale => {
-      const dateStr = sale.createdAt?.split("T")[0];
+    list.forEach((sale: any) => {
+      const dateStr = (sale.createdAt || sale.creation)?.split("T")[0];
       if (dateStr) {
         if (!dailyMap[dateStr]) {
           dailyMap[dateStr] = { count: 0, revenue: 0, discount: 0 };
         }
         dailyMap[dateStr].count += 1;
-        dailyMap[dateStr].revenue += sale.finalAmount;
-        dailyMap[dateStr].discount += sale.discount;
+        dailyMap[dateStr].revenue += (sale.finalAmount || 0);
+        dailyMap[dateStr].discount += (sale.discount || 0);
       }
     });
 
@@ -47,7 +45,7 @@ export async function getDailySales(req: Request, res: Response): Promise<void> 
 
 export async function getMonthlySales(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Sale.find();
+    const list = await getFrappeDocs("ATS Sale");
     const monthlyMap: { [month: string]: { count: number, revenue: number } } = {};
 
     // Pre-fill some months
@@ -58,15 +56,15 @@ export async function getMonthlySales(req: Request, res: Response): Promise<void
       monthlyMap[key] = { count: 0, revenue: 0 };
     });
 
-    list.forEach(sale => {
-      const dateParts = sale.createdAt?.split("T")[0].split("-");
+    list.forEach((sale: any) => {
+      const dateParts = (sale.createdAt || sale.creation)?.split("T")[0].split("-");
       if (dateParts && dateParts.length >= 2) {
         const monthKey = `${dateParts[0]}-${dateParts[1]}`;
         if (!monthlyMap[monthKey]) {
           monthlyMap[monthKey] = { count: 0, revenue: 0 };
         }
         monthlyMap[monthKey].count += 1;
-        monthlyMap[monthKey].revenue += sale.finalAmount;
+        monthlyMap[monthKey].revenue += (sale.finalAmount || 0);
       }
     });
 
@@ -90,25 +88,26 @@ export async function getMonthlySales(req: Request, res: Response): Promise<void
 
 export async function getExpensesReport(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Expense.find();
+    const list = await getFrappeDocs("ATS Expense");
     
     let totalExpense = 0;
     let approvedExpense = 0;
     let pendingExpense = 0;
     const categoryMap: { [cat: string]: number } = {};
 
-    list.forEach(item => {
-      totalExpense += item.amount;
+    list.forEach((item: any) => {
+      const amount = item.amount || 0;
+      totalExpense += amount;
       if (item.status === "Approved") {
-        approvedExpense += item.amount;
+        approvedExpense += amount;
       } else if (item.status === "Pending") {
-        pendingExpense += item.amount;
+        pendingExpense += amount;
       }
 
       if (!categoryMap[item.category]) {
         categoryMap[item.category] = 0;
       }
-      categoryMap[item.category] += item.amount;
+      categoryMap[item.category] += amount;
     });
 
     const breakdown = Object.keys(categoryMap).map(category => ({
@@ -121,7 +120,7 @@ export async function getExpensesReport(req: Request, res: Response): Promise<vo
       approvedExpense: parseFloat(approvedExpense.toFixed(2)),
       pendingExpense: parseFloat(pendingExpense.toFixed(2)),
       breakdown,
-      rawList: list
+      rawList: list.map(mapDoc)
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to compile expenses report" });
@@ -130,17 +129,18 @@ export async function getExpensesReport(req: Request, res: Response): Promise<vo
 
 export async function getAttendanceReport(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Attendance.find();
-    const users = await User.find({ role: "Employee" });
+    const list = await getFrappeDocs("ATS Attendance");
+    const allUsers = await getFrappeDocs("ATS User");
+    const users = allUsers.filter((u: any) => u.role === "Employee");
 
-    const attendanceSummary = users.map(user => {
-      const shifts = list.filter(a => a.employeeId === user._id);
-      const totalPresentDays = shifts.filter(a => a.status === "Checked Out").length;
-      const activeCheckins = shifts.filter(a => a.status === "Checked In").length;
+    const attendanceSummary = users.map((user: any) => {
+      const shifts = list.filter((a: any) => a.employeeId === user.name);
+      const totalPresentDays = shifts.filter((a: any) => a.status === "Checked Out").length;
+      const activeCheckins = shifts.filter((a: any) => a.status === "Checked In").length;
       
       let sumHours = 0;
       let countHours = 0;
-      shifts.forEach(s => {
+      shifts.forEach((s: any) => {
         if (s.workingHours !== undefined) {
           sumHours += s.workingHours;
           countHours++;
@@ -162,10 +162,10 @@ export async function getAttendanceReport(req: Request, res: Response): Promise<
     res.status(200).json({
       totalRegisteredEmployees: users.length,
       averageShiftDuration: attendanceSummary.length > 0
-        ? parseFloat((attendanceSummary.reduce((acc, current) => acc + current.averageShiftHours, 0) / attendanceSummary.length).toFixed(2))
+        ? parseFloat((attendanceSummary.reduce((acc: number, current: any) => acc + current.averageShiftHours, 0) / attendanceSummary.length).toFixed(2))
         : 0,
       employeeBreakdown: attendanceSummary,
-      rawLogs: list
+      rawLogs: list.map(mapDoc)
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to generate attendance reports" });
@@ -174,18 +174,20 @@ export async function getAttendanceReport(req: Request, res: Response): Promise<
 
 export async function getInventoryReport(req: Request, res: Response): Promise<void> {
   try {
-    const list = await Inventory.find();
+    const list = await getFrappeDocs("ATS Inventory Item");
 
-    const lowStockItems = list.filter(i => i.stockStatus === "Low Stock");
-    const outOfStockItems = list.filter(i => i.stockStatus === "Out of Stock");
+    const lowStockItems = list.filter((i: any) => i.stockStatus === "Low Stock");
+    const outOfStockItems = list.filter((i: any) => i.stockStatus === "Out of Stock");
     
     let totalItems = 0;
     let totalAssetValue = 0;
     const categoryCounts: { [cat: string]: number } = {};
 
-    list.forEach(item => {
-      totalItems += item.quantity;
-      totalAssetValue += item.quantity * item.purchasePrice;
+    list.forEach((item: any) => {
+      const qty = item.quantity || 0;
+      const price = item.purchasePrice || 0;
+      totalItems += qty;
+      totalAssetValue += qty * price;
 
       if (!categoryCounts[item.category]) {
         categoryCounts[item.category] = 0;
@@ -204,21 +206,23 @@ export async function getInventoryReport(req: Request, res: Response): Promise<v
       totalAssetValue: parseFloat(totalAssetValue.toFixed(2)),
       lowStockCount: lowStockItems.length,
       outOfStockCount: outOfStockItems.length,
-      lowStockItems,
-      outOfStockItems,
+      lowStockItems: lowStockItems.map(mapDoc),
+      outOfStockItems: outOfStockItems.map(mapDoc),
       categories: categorySummary
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to build inventory analytical reports" });
   }
 }
+
 export async function getNetProfitOverview(req: Request, res: Response): Promise<void> {
   try {
-    const sales = await Sale.find();
-    const expenses = await Expense.find({ status: "Approved" });
+    const sales = await getFrappeDocs("ATS Sale");
+    const expenses = await getFrappeDocs("ATS Expense");
+    const approvedExpenses = expenses.filter((e: any) => e.status === "Approved");
 
-    const totalSales = sales.reduce((sum, item) => sum + item.finalAmount, 0);
-    const totalExpenses = expenses.reduce((sum, item) => sum + item.amount, 0);
+    const totalSales = sales.reduce((sum: number, item: any) => sum + (item.finalAmount || 0), 0);
+    const totalExpenses = approvedExpenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
     const netProfit = totalSales - totalExpenses;
 
     res.status(200).json({
