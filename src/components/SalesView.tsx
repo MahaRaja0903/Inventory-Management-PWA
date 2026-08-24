@@ -33,6 +33,33 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
   const [tattooDetails, setTattooDetails] = useState("");
   const [piercingDetails, setPiercingDetails] = useState("");
 
+  // Customer Search & Quick Create
+  const [searchMobile, setSearchMobile] = useState("");
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+
+  const handleQuickCreateCustomer = async () => {
+    if (!newCustomerName || !searchMobile) {
+      showToast("Name and Mobile are required.", "warning");
+      return;
+    }
+    try {
+      const res = await apiFetch<any>("/customers", {
+        method: "POST",
+        body: JSON.stringify({ name: newCustomerName, mobile: searchMobile, email: newCustomerEmail, address: "" })
+      });
+      showToast("Customer created successfully!", "success");
+      await fetchData();
+      setCustomerId(res.customer._id);
+      setShowCreateCustomer(false);
+      setNewCustomerName("");
+      setNewCustomerEmail("");
+    } catch (err: any) {
+      showToast(err.message || "Failed to create customer.", "error");
+    }
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -159,18 +186,57 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
 
           <form onSubmit={handleCreateSale} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Link Customer Profile (Optional)</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white"
-                >
-                  <option value="">Walk-In Client (Anonymous)</option>
-                  {customers.map(c => (
-                    <option key={c._id} value={c._id}>{c.name} — Phone: {c.mobile}</option>
-                  ))}
-                </select>
+              <div className="relative relative-customer-search">
+                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Link Customer Profile (Mobile No.)</label>
+                {customerId ? (
+                  <div className="flex items-center justify-between w-full px-3 py-2 bg-slate-950 border border-amber-500/30 rounded-lg text-xs text-white">
+                    <span>{customers.find(c => c._id === customerId)?.name || "Walk-In"} — {customers.find(c => c._id === customerId)?.mobile || "N/A"}</span>
+                    <button type="button" onClick={() => { setCustomerId(""); setSearchMobile(""); }} className="text-slate-400 hover:text-red-400"><X className="w-4 h-4" /></button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Search mobile number or leave blank for walk-in..."
+                      value={searchMobile}
+                      onChange={(e) => setSearchMobile(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none transition-colors"
+                    />
+                    {searchMobile.length > 2 && (
+                      <div className="absolute z-10 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {customers.filter(c => c.mobile.includes(searchMobile)).length > 0 ? (
+                          customers.filter(c => c.mobile.includes(searchMobile)).map(c => (
+                            <div key={c._id} onClick={() => { setCustomerId(c._id); setSearchMobile(""); }} className="px-3 py-2.5 hover:bg-slate-800 cursor-pointer text-xs text-white border-b border-slate-800/50 flex justify-between items-center">
+                              <span>{c.name}</span>
+                              <span className="text-amber-500 font-mono text-[10px]">{c.mobile}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-3 text-xs text-slate-400 flex flex-col gap-2">
+                            <span>No customer matches this number.</span>
+                            {!showCreateCustomer && (
+                              <button type="button" onClick={() => { setShowCreateCustomer(true); }} className="w-fit text-amber-500 font-bold hover:underline flex items-center gap-1">
+                                <Plus className="w-3 h-3" /> Create New Customer
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {showCreateCustomer && !customerId && (
+                  <div className="mt-3 p-3 bg-slate-950 border border-amber-500/20 rounded-lg space-y-2.5 shadow-lg relative z-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> New Customer</span>
+                      <button type="button" onClick={() => setShowCreateCustomer(false)} className="text-slate-500 hover:text-red-400 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    <input type="text" placeholder="Full Name" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none" />
+                    <input type="email" placeholder="Email Address (Optional)" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none" />
+                    <button type="button" onClick={handleQuickCreateCustomer} className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-bold uppercase transition-colors">Save & Link</button>
+                  </div>
+                )}
               </div>
 
               {isAdmin ? (

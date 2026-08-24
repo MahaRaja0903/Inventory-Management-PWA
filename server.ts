@@ -1,8 +1,6 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import apiRouter from "./src/routes/api";
-import viteConfigFn from "./vite.config.js";
 
 const app = express();
 
@@ -19,6 +17,10 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // Vite routing integration
 if (process.env.NODE_ENV !== "production") {
   const startDevServer = async () => {
+    const { createServer: createViteServer } = await import("vite");
+    const viteConfigFnModule = await import("./vite.config.js");
+    const viteConfigFn = viteConfigFnModule.default || viteConfigFnModule;
+
     // Resolve the config function (in case it returns an object or promise)
     const viteConfig = typeof viteConfigFn === "function" 
       ? await (viteConfigFn as any)({ command: 'serve', mode: 'development' }) 
