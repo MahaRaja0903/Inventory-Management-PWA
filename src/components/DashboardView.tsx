@@ -188,6 +188,13 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                     Shift Logged: Worked {todayAttendance.workingHours || 0} hrs
                   </div>
                 )}
+                <button
+                  onClick={() => setActiveTab("sales")}
+                  className="bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-sky-500/10 transition-transform active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Bill
+                </button>
               </div>
             ) : (
               // Admin quick action toggling

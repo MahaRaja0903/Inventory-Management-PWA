@@ -22,7 +22,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
     { id: "tasks", label: "Tasks", icon: ClipboardList, role: "Admin" },
     { id: "my-tasks", label: "My Tasks", icon: ClipboardCheck, role: "Employee" },
     { id: "sales", label: "Sales Log", icon: Receipt, role: "Both" },
-    { id: "customers", label: "Client Portfolio", icon: Users, role: "Both" },
+    { id: "customers", label: "Customer Portfolio", icon: Users, role: "Both" },
     { id: "attendance", label: "Attendance", icon: CalendarClock, role: "Both" },
     { id: "expenses", label: "Studio Expenses", icon: Coins, role: "Both" },
     { id: "inventory", label: "Supplies Stock", icon: PackageOpen, role: "Both" },
@@ -44,7 +44,7 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout, notif
     { id: "tasks", label: "Tasks", icon: ClipboardList, role: "Admin" },
     { id: "my-tasks", label: "My Tasks", icon: ClipboardCheck, role: "Employee" },
     { id: "sales", label: "Sales", icon: Receipt, role: "Admin" },
-    { id: "customers", label: "Clients", icon: Users, role: "Both" },
+    { id: "customers", label: "Customers", icon: Users, role: "Both" },
     { id: "attendance", label: "Shift", icon: CalendarClock, role: "Both" },
     { id: "expenses", label: "Bills", icon: Coins, role: "Employee" }
   ] as const;

@@ -29,7 +29,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
   const [selectedItemId, setSelectedItemId] = useState("");
   const [selectedItemQty, setSelectedItemQty] = useState("1");
 
-  // Custom portfolio details fields if linked to client
+  // Custom portfolio details fields if linked to Customer
   const [tattooDetails, setTattooDetails] = useState("");
   const [piercingDetails, setPiercingDetails] = useState("");
 
@@ -152,7 +152,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
   };
 
   const handleDeleteSale = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this sales transaction record? This will adjust related client metrics, and cannot be undone.")) {
+    if (!confirm("Are you sure you want to delete this sales transaction record? This will adjust related Customer metrics, and cannot be undone.")) {
       return;
     }
 
@@ -180,7 +180,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
             </div>
             <div>
               <h2 className="text-base font-bold text-white uppercase tracking-wider">Log Service Sale</h2>
-              <p className="text-[11px] text-slate-400">Record a payment transaction matching booking styles and link to client files.</p>
+              <p className="text-[11px] text-slate-400">Record a payment transaction matching booking styles and link to Customer files.</p>
             </div>
           </div>
 
@@ -465,7 +465,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
                   <span className="text-[9px] bg-slate-950 border border-slate-850 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
                     {sale.serviceType}
                   </span>
-                  <h4 className="text-xs font-bold text-white mt-1.5">{sale.customerName || "Walk-In Client"}</h4>
+                  <h4 className="text-xs font-bold text-white mt-1.5">{sale.customerName || "Walk-In Customer"}</h4>
                   <div className="text-[10px] text-slate-400 space-y-0.5 font-sans mt-0.5">
                     <span>Artist: <strong className="text-slate-300">{sale.employeeName}</strong></span>
                     {sale.itemsUsed && sale.itemsUsed.length > 0 && (
@@ -509,3 +509,4 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
     </div>
   );
 }
+

@@ -134,15 +134,16 @@ export async function getAttendanceReport(req: Request, res: Response): Promise<
     const users = allUsers.filter((u: any) => u.role === "Employee");
 
     const attendanceSummary = users.map((user: any) => {
-      const shifts = list.filter((a: any) => a.employeeId === user.name);
+      const shifts = list.filter((a: any) => (a.employeeid || a.employeeId) === user.name);
       const totalPresentDays = shifts.filter((a: any) => a.status === "Checked Out").length;
       const activeCheckins = shifts.filter((a: any) => a.status === "Checked In").length;
       
       let sumHours = 0;
       let countHours = 0;
       shifts.forEach((s: any) => {
-        if (s.workingHours !== undefined) {
-          sumHours += s.workingHours;
+        const hours = s.workinghours !== undefined ? s.workinghours : s.workingHours;
+        if (hours !== undefined) {
+          sumHours += hours;
           countHours++;
         }
       });

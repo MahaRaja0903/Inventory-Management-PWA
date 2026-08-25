@@ -134,8 +134,8 @@ export default function CustomersView({ user }: CustomersViewProps) {
       <div className="lg:col-span-2 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Client Portfolio Registry</h2>
-            <p className="text-xs text-slate-400">Track client files, total spend mappings, visits cycles, and historical design portfolios.</p>
+            <h2 className="text-xl font-bold text-white tracking-tight">Customer Portfolio Registry</h2>
+            <p className="text-xs text-slate-400">Track Customer files, total spend mappings, visits cycles, and historical design portfolios.</p>
           </div>
 
           <button
@@ -143,7 +143,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
             className="self-start sm:self-center bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition-transform duration-100 active:scale-95 shadow-lg shadow-amber-500/10"
           >
             <Plus className="w-4 h-4 text-slate-950" />
-            New Client File
+            New Customer File
           </button>
         </div>
 
@@ -169,8 +169,8 @@ export default function CustomersView({ user }: CustomersViewProps) {
         ) : filteredCustomers.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-xl py-12 text-center select-none">
             <Users className="w-12 h-12 text-slate-705 mx-auto mb-2" />
-            <p className="text-white text-sm font-bold">No Client Profiles Found</p>
-            <p className="text-slate-500 text-xs mt-1">Create client files to attach design notes and sales invoices.</p>
+            <p className="text-white text-sm font-bold">No Customer Profiles Found</p>
+            <p className="text-slate-500 text-xs mt-1">Create Customer files to attach design notes and sales invoices.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -248,7 +248,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 py-12 text-center border-dashed border-slate-700/60 select-none">
             <FolderOpen className="w-12 h-12 text-slate-700 mx-auto mb-2" />
             <h4 className="text-slate-350 text-xs font-bold uppercase tracking-wider">No customer selected</h4>
-            <p className="text-slate-500 text-[11px] mt-1 max-w-[200px] mx-auto">Select a client profile card to view historical portfolios and tattoo service drawings logs.</p>
+            <p className="text-slate-500 text-[11px] mt-1 max-w-[200px] mx-auto">Select a Customer profile card to view historical portfolios and tattoo service drawings logs.</p>
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-5 animate-fadeIn">
@@ -316,13 +316,13 @@ export default function CustomersView({ user }: CustomersViewProps) {
         )}
       </div>
 
-      {/* CREATE / AMEND CLIENT DIALOG */}
+      {/* CREATE / AMEND Customer DIALOG */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-40">
           <div className="bg-slate-900 border border-amber-500/15 rounded-xl w-full max-w-md overflow-hidden shadow-2xl relative select-none animate-fadeIn">
             <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
               <h3 className="font-bold text-white text-xs uppercase tracking-wider">
-                {editingCustomer ? `Amend Profile of ${editingCustomer.name}` : "Create New Client File"}
+                {editingCustomer ? `Amend Profile of ${editingCustomer.name}` : "Create New Customer File"}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
@@ -331,7 +331,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
 
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Client Full Name</label>
+                <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Customer Full Name</label>
                 <input
                   type="text"
                   required
@@ -399,3 +399,4 @@ export default function CustomersView({ user }: CustomersViewProps) {
     </div>
   );
 }
+

@@ -36,9 +36,24 @@ export default function AttendanceView({ user }: AttendanceViewProps) {
   const handleAction = async (type: "check-in" | "check-out") => {
     setIsPunching(true);
     try {
+      let gpsLocation = "34.0522, -118.2437"; // fallback
+      
+      if (type === "check-in") {
+        if (navigator.geolocation) {
+          try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+            });
+            gpsLocation = `${position.coords.latitude}, ${position.coords.longitude}`;
+          } catch (e) {
+            console.warn("Geolocation denied or failed", e);
+          }
+        }
+      }
+
       await apiFetch(`/attendance/${type}`, {
         method: "POST",
-        body: JSON.stringify({ gpsLocation: "34.0522, -118.2437" }) // Mock Beverly Hills GPS block coordinates
+        body: JSON.stringify({ gpsLocation })
       });
       await fetchLogs();
     } catch (err: any) {
