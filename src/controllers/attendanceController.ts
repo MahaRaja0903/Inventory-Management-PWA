@@ -48,10 +48,9 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
     const { gpsLocation } = req.body;
 
     // Geo-fencing logic
-    const configs = await getFrappeDocs("ATS Settings");
-    const config = configs.length > 0 ? configs[0] : null;
+    const config = await getFrappeDoc("ATS Settings", "ATS Settings");
     
-    if (config && config.geofenceEnabled) {
+    if (config && config.geofenceenabled) {
       if (!gpsLocation || gpsLocation === "Unknown") {
          res.status(400).json({ message: "Location required for check-in when geofencing is enabled." });
          return;
@@ -61,8 +60,8 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
       if (parts.length === 2) {
         const lat = parseFloat(parts[0].trim());
         const lon = parseFloat(parts[1].trim());
-        const targetLat = parseFloat(config.geofenceLatitude);
-        const targetLon = parseFloat(config.geofenceLongitude);
+        const targetLat = parseFloat(config.geofencelatitude);
+        const targetLon = parseFloat(config.geofencelongitude);
         
         if (!isNaN(targetLat) && !isNaN(targetLon)) {
           const distance = getDistanceFromLatLonInM(lat, lon, targetLat, targetLon);
@@ -74,10 +73,11 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
       }
     }
 
-    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const nowFormatted = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19).replace('T', ' ');
     let record = await createFrappeDoc("ATS Attendance", {
       employeeid: user.id,
-      checkintime: nowIso,
+      checkintime: nowFormatted,
       gpslocation: gpsLocation || "34.0522, -118.2437",
       date: todayStr,
       status: "Checked In",
@@ -86,7 +86,7 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
 
     if (record) record._id = record.name;
     record = mapFrappeFields(record);
-    record.checkInTime = record.checkInTime || nowIso;
+    record.checkInTime = record.checkInTime || nowFormatted;
 
     res.status(201).json({ message: "Checked in successfully!", attendance: record });
   } catch (error: any) {
@@ -109,7 +109,10 @@ export async function checkOut(req: Request, res: Response): Promise<void> {
     }
 
     const now = new Date();
-    const inTimeStr = existing.checkInTime || existing.creation || now.toISOString();
+    const nowFormatted = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19).replace('T', ' ');
+    
+    // Fallback to replacing T with space if from frappe format or using raw iso string
+    const inTimeStr = (existing.checkInTime || existing.creation || now.toISOString()).replace(' ', 'T');
     const inTime = new Date(inTimeStr).getTime();
     const outTime = now.getTime();
     
@@ -124,7 +127,7 @@ export async function checkOut(req: Request, res: Response): Promise<void> {
     }
 
     let updated = await updateFrappeDoc("ATS Attendance", existing.name, {
-      checkouttime: now.toISOString(),
+      checkouttime: nowFormatted,
       status: "Checked Out",
       workinghours: hours
     });
@@ -132,7 +135,7 @@ export async function checkOut(req: Request, res: Response): Promise<void> {
     if (updated) updated._id = updated.name;
     updated = mapFrappeFields(updated);
     
-    updated.checkOutTime = updated.checkOutTime || now.toISOString();
+    updated.checkOutTime = updated.checkOutTime || nowFormatted;
     updated.workingHours = updated.workingHours !== undefined ? updated.workingHours : hours;
 
     res.status(200).json({ message: "Checked out successfully!", attendance: updated });

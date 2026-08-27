@@ -21,24 +21,45 @@ function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
-  const { email, password, latitude, longitude } = req.body;
+  const { loginId, password, latitude, longitude } = req.body;
 
-  if (!email || !password) {
-    res.status(400).json({ message: "Email and password are required" });
+  if (!loginId || !password) {
+    res.status(400).json({ message: "Email/Username and password are required" });
     return;
   }
 
   try {
     // 1. Try Frappe Native Login first (this handles 'Administrator' and other real users)
-    const isValidFrappeLogin = await frappeLogin(email, password);
+    const isValidFrappeLogin = await frappeLogin(loginId, password);
+
+    // 1.5. Resolve username to email if necessary
+    // If the user logs in with a username (like 'Owner'), find their real email from Frappe User doctype
+    let actualEmail = loginId;
+    try {
+      const frappeUsers = await getFrappeDocs("User", { username: loginId });
+      if (frappeUsers && frappeUsers.length > 0) {
+        actualEmail = frappeUsers[0].email || frappeUsers[0].name;
+      }
+    } catch (e) {
+      // Ignore errors here and just fallback to using loginId
+    }
 
     // 2. Fetch User Profile from ATS User Doctype
-    // Using Frappe REST API to search for the user by email
-    const users = await getFrappeDocs(USER_DOCTYPE, { email: email });
+    // Search for the user by resolved email first, then by name, then by original loginId
+    let users = await getFrappeDocs(USER_DOCTYPE, { email: actualEmail });
+    if (users.length === 0) {
+       users = await getFrappeDocs(USER_DOCTYPE, { name: actualEmail });
+    }
+    if (users.length === 0 && actualEmail !== loginId) {
+       users = await getFrappeDocs(USER_DOCTYPE, { email: loginId });
+    }
+    if (users.length === 0 && actualEmail !== loginId) {
+       users = await getFrappeDocs(USER_DOCTYPE, { name: loginId });
+    }
     let user = users.length > 0 ? users[0] : null;
 
     // Support Administrator fallback if they haven't created an ATS User for the Admin yet
-    if (isValidFrappeLogin && !user && email.toLowerCase() === "administrator") {
+    if (isValidFrappeLogin && !user && loginId.toLowerCase() === "administrator") {
       user = {
         name: "Administrator",
         email: "Administrator",
@@ -48,13 +69,13 @@ export async function login(req: Request, res: Response): Promise<void> {
       };
     } else if (!isValidFrappeLogin && !user) {
       // If neither Frappe login worked nor an ATS User exists
-      res.status(401).json({ message: "Invalid email or password" });
+      res.status(401).json({ message: "Invalid credentials" });
       return;
     } else if (!isValidFrappeLogin && user) {
        // If Frappe login failed but ATS User exists, we can optionally check the raw password field in ATS User if they didn't create a real Frappe user
        // Note: In production, they SHOULD be real Frappe users. For now, we fallback to raw check if needed, or just reject.
        if (user.password !== password) {
-          res.status(401).json({ message: "Invalid email or password" });
+          res.status(401).json({ message: "Invalid credentials" });
           return;
        }
     }
@@ -72,36 +93,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Geofencing verification for employees
-    if (user.role === "Employee") {
-      // Get settings (Single DocType in Frappe)
-      const systemSettings = await getFrappeDoc(SETTINGS_DOCTYPE, SETTINGS_DOCTYPE);
-      if (systemSettings && systemSettings.geofenceEnabled) {
-        const targetLat = systemSettings.geofenceLatitude;
-        const targetLon = systemSettings.geofenceLongitude;
 
-        if (targetLat !== undefined && targetLon !== undefined && targetLat !== 0 && targetLon !== 0) {
-          if (latitude === undefined || longitude === undefined) {
-            res.status(400).json({ message: "Location permission is required for Employee login. Please enable location services on your device." });
-            return;
-          }
-
-          const distance = getDistanceInMeters(
-            Number(latitude),
-            Number(longitude),
-            Number(targetLat),
-            Number(targetLon)
-          );
-
-          if (distance > 5) {
-            res.status(403).json({
-              message: `Access denied. You must be within 5 meters of the studio to log in. (Currently ${distance.toFixed(1)} meters away)`
-            });
-            return;
-          }
-        }
-      }
-    }
 
     // Generate accessToken
     const accessToken = jwt.sign(

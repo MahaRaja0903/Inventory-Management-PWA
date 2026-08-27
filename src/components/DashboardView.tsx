@@ -22,6 +22,8 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
   // Attendance states for employee
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const [locationDialogMessage, setLocationDialogMessage] = useState("");
 
   const fetchData = async () => {
     try {
@@ -61,18 +63,58 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
   // Attendance helpers for employee
   const handleCheckIn = async () => {
     setIsCheckingIn(true);
-    try {
-      const response = await apiFetch("/attendance/check-in", {
-        method: "POST"
-      });
-      // Refresh
-      await fetchData();
-      triggerNotificationRefresh();
-    } catch (err: any) {
-      alert(err.message || "Attendance check-in failed");
-    } finally {
+    
+    if (!navigator.geolocation) {
+      setLocationDialogMessage("Your browser does not support geolocation. Please use a modern browser to check in. You must be within 2 meters from the Store Radius.");
+      setShowLocationDialog(true);
       setIsCheckingIn(false);
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const gpsLocation = `${latitude}, ${longitude}`;
+        
+        try {
+          const response = await apiFetch("/attendance/check-in", {
+            method: "POST",
+            body: JSON.stringify({ gpsLocation })
+          });
+          // Refresh
+          await fetchData();
+          triggerNotificationRefresh();
+        } catch (err: any) {
+          if (err.message && (err.message.includes("Location required") || err.message.includes("Store Radius") || err.message.includes("geofencing"))) {
+            let finalMessage = err.message;
+            if (!finalMessage.includes("Store Radius")) {
+              finalMessage += " You must be within 2 meters from the Store Radius.";
+            }
+            setLocationDialogMessage(finalMessage);
+            setShowLocationDialog(true);
+          } else {
+            alert(err.message || "Attendance check-in failed");
+          }
+        } finally {
+          setIsCheckingIn(false);
+        }
+      },
+      (err) => {
+        setIsCheckingIn(false);
+        let msg = "Unable to retrieve your location. Please ensure location services are enabled on your device.";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "Location permission was denied. To check in, please click the lock icon in your browser's URL bar, allow location access, and try again.";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = "Location information is currently unavailable. Please try again or check your device settings.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "Location request timed out. Please check your signal and try again.";
+        }
+        msg += " You must be within 2 meters from the Store Radius.";
+        setLocationDialogMessage(msg);
+        setShowLocationDialog(true);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleCheckOut = async () => {
@@ -506,6 +548,34 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
             </div>
           </div>
         </>
+      )}
+
+      {/* Location Requirements Modal */}
+      {showLocationDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/50">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 border border-red-500/20">
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white tracking-tight mb-2">
+                {locationDialogMessage.includes("Store Radius") ? "Out of Store Radius" : "Location Required"}
+              </h3>
+              <p className="text-sm text-slate-300 mb-6 font-medium leading-relaxed">
+                {locationDialogMessage}
+              </p>
+              
+              <div className="w-full space-y-3">
+                <button
+                  onClick={() => setShowLocationDialog(false)}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition-transform active:scale-95 text-sm"
+                >
+                  I Understand
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -68,8 +68,9 @@ export async function createFrappeDoc(docType: string, data: any): Promise<any> 
     const response = await axios.post(`${FRAPPE_URL}/${docType}`, data, { headers });
     return response.data.data;
   } catch (error: any) {
-    console.error(`Error creating ${docType} in Frappe:`, error.response?.data || error.message);
-    throw new Error(`Failed to create ${docType}`);
+    const details = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    console.error(`Error creating ${docType} in Frappe:`, details);
+    throw new Error(`Failed to create ${docType}: ${details}`);
   }
 }
 
@@ -81,8 +82,9 @@ export async function updateFrappeDoc(docType: string, name: string, data: any):
     const response = await axios.put(`${FRAPPE_URL}/${docType}/${name}`, data, { headers });
     return response.data.data;
   } catch (error: any) {
-    console.error(`Error updating ${docType} ${name} in Frappe:`, error.response?.data || error.message);
-    throw new Error(`Failed to update ${docType}`);
+    const details = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    console.error(`Error updating ${docType} ${name} in Frappe:`, details);
+    throw new Error(`Failed to update ${docType}: ${details}`);
   }
 }
 

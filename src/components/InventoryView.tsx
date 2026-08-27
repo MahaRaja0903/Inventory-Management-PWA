@@ -124,9 +124,10 @@ export default function InventoryView({ user }: InventoryViewProps) {
 
   // Compute filtering lists
   const filteredItems = items.filter(item => {
-    const matchesSearch = item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          item.supplier.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = (item.itemName?.toLowerCase() || "").includes(searchLower) || 
+                          (item.notes?.toLowerCase() || "").includes(searchLower) ||
+                          (item.supplier?.toLowerCase() || "").includes(searchLower);
     const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });

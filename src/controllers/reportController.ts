@@ -19,13 +19,15 @@ export async function getDailySales(req: Request, res: Response): Promise<void> 
     }
 
     list.forEach((sale: any) => {
-      const dateStr = (sale.createdAt || sale.creation)?.split("T")[0];
+      const dateString = sale.createdAt || sale.creation;
+      const dateStr = dateString ? dateString.substring(0, 10) : undefined;
       if (dateStr) {
         if (!dailyMap[dateStr]) {
           dailyMap[dateStr] = { count: 0, revenue: 0, discount: 0 };
         }
         dailyMap[dateStr].count += 1;
-        dailyMap[dateStr].revenue += (sale.finalAmount || 0);
+        const finalAmt = sale.finalAmount !== undefined ? sale.finalAmount : (sale.finalamount || 0);
+        dailyMap[dateStr].revenue += finalAmt;
         dailyMap[dateStr].discount += (sale.discount || 0);
       }
     });
@@ -57,14 +59,16 @@ export async function getMonthlySales(req: Request, res: Response): Promise<void
     });
 
     list.forEach((sale: any) => {
-      const dateParts = (sale.createdAt || sale.creation)?.split("T")[0].split("-");
+      const dateString = sale.createdAt || sale.creation;
+      const dateParts = dateString ? dateString.substring(0, 10).split("-") : null;
       if (dateParts && dateParts.length >= 2) {
         const monthKey = `${dateParts[0]}-${dateParts[1]}`;
         if (!monthlyMap[monthKey]) {
           monthlyMap[monthKey] = { count: 0, revenue: 0 };
         }
         monthlyMap[monthKey].count += 1;
-        monthlyMap[monthKey].revenue += (sale.finalAmount || 0);
+        const finalAmt = sale.finalAmount !== undefined ? sale.finalAmount : (sale.finalamount || 0);
+        monthlyMap[monthKey].revenue += finalAmt;
       }
     });
 
@@ -222,7 +226,10 @@ export async function getNetProfitOverview(req: Request, res: Response): Promise
     const expenses = await getFrappeDocs("ATS Expense");
     const approvedExpenses = expenses.filter((e: any) => e.status === "Approved");
 
-    const totalSales = sales.reduce((sum: number, item: any) => sum + (item.finalAmount || 0), 0);
+    const totalSales = sales.reduce((sum: number, item: any) => {
+      const amt = item.finalAmount !== undefined ? item.finalAmount : (item.finalamount || 0);
+      return sum + amt;
+    }, 0);
     const totalExpenses = approvedExpenses.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
     const netProfit = totalSales - totalExpenses;
 

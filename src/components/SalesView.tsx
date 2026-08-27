@@ -26,6 +26,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
 
   // Items Used logic
   const [itemsUsed, setItemsUsed] = useState<SaleItem[]>([]);
+  const [selectedItemGroup, setSelectedItemGroup] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [selectedItemQty, setSelectedItemQty] = useState("1");
 
@@ -167,6 +168,11 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
   // Calculations
   const finalPrice = Math.max(0, Number(amount || 0) - Number(discount || 0));
 
+  const itemGroups = Array.from(new Set(inventory.map(i => i.category).filter(Boolean)));
+  const availableItems = selectedItemGroup 
+    ? inventory.filter(i => i.category === selectedItemGroup) 
+    : inventory;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 font-sans select-none">
       {/* LEFT SECTION: LOGGER PANEL (3 cols) */}
@@ -190,7 +196,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
                 <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Link Customer Profile (Mobile No.)</label>
                 {customerId ? (
                   <div className="flex items-center justify-between w-full px-3 py-2 bg-slate-950 border border-amber-500/30 rounded-lg text-xs text-white">
-                    <span>{customers.find(c => c._id === customerId)?.name || "Walk-In"} — {customers.find(c => c._id === customerId)?.mobile || "N/A"}</span>
+                    <span>{customers.find(c => c._id === customerId)?.name || "Walk-In"}</span>
                     <button type="button" onClick={() => { setCustomerId(""); setSearchMobile(""); }} className="text-slate-400 hover:text-red-400"><X className="w-4 h-4" /></button>
                   </div>
                 ) : (
@@ -208,7 +214,6 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
                           customers.filter(c => c.mobile.includes(searchMobile)).map(c => (
                             <div key={c._id} onClick={() => { setCustomerId(c._id); setSearchMobile(""); }} className="px-3 py-2.5 hover:bg-slate-800 cursor-pointer text-xs text-white border-b border-slate-800/50 flex justify-between items-center">
                               <span>{c.name}</span>
-                              <span className="text-amber-500 font-mono text-[10px]">{c.mobile}</span>
                             </div>
                           ))
                         ) : (
@@ -340,12 +345,26 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <select
+                  value={selectedItemGroup}
+                  onChange={(e) => {
+                    setSelectedItemGroup(e.target.value);
+                    setSelectedItemId("");
+                  }}
+                  className="flex-1 px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white"
+                >
+                  <option value="">All Item Groups...</option>
+                  {itemGroups.map(group => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+
+                <select
                   value={selectedItemId}
                   onChange={(e) => setSelectedItemId(e.target.value)}
                   className="flex-1 px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white"
                 >
                   <option value="">Select Studio Supply...</option>
-                  {inventory.map(item => (
+                  {availableItems.map(item => (
                     <option key={item._id} value={item._id}>{item.itemName} (Stock: {item.quantity})</option>
                   ))}
                 </select>

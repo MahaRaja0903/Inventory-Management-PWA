@@ -7,28 +7,19 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess }: LoginViewProps) {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Quick fill indicators
-  const handleQuickFill = (role: "admin" | "employee") => {
-    if (role === "admin") {
-      setEmail("admin@gmail.com");
-      setPassword("Test@123");
-    } else {
-      setEmail("employee@gmail.com");
-      setPassword("Test@123");
-    }
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      console.warn("[LoginView] Login halted: missing email or password");
+    if (!loginId || !password) {
+      console.warn("[LoginView] Login halted: missing loginId or password");
       setError("Please fill in all credentials");
       return;
     }
@@ -36,33 +27,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
     setLoading(true);
     setError("");
 
-    let latitude: number | undefined;
-    let longitude: number | undefined;
-
-    if (navigator.geolocation) {
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0
-          });
-        });
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-      } catch (geoError: any) {
-        console.warn("[LoginView] Failed to acquire client location:", geoError);
-        // Do not crash here; backend decides if location coordinates are strictly required.
-      }
-    } else {
-      console.warn("[LoginView] Geolocation API is not supported by this browser.");
-    }
-
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, latitude, longitude })
+        body: JSON.stringify({ loginId, password })
       });
 
       const text = await response.text();
@@ -120,17 +89,17 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2" htmlFor="login-email">
-              Identity Coordinates (Email)
+            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2" htmlFor="login-id">
+              Identity Coordinates (Email or Username)
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
               <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="artist@aquarius.com"
+                id="login-id"
+                type="text"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="artist@aquarius.com or artist123"
                 className="w-full pl-10 pr-4 py-3 bg-ui-dark border border-ui-border rounded-lg text-white placeholder-slate-600 text-xs focus:outline-none focus:border-brand-gold transition-colors"
                 required
               />
@@ -177,28 +146,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             disabled={loading}
             className="w-full bg-gradient-to-r from-brand-gold-dark to-brand-gold hover:from-brand-gold hover:to-brand-gold-light text-ui-dark font-black uppercase tracking-widest text-[11px] py-4 rounded-lg shadow-xl shadow-brand-gold/5 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
           >
-            {loading ? "Decrypting..." : "Initialize Workspace"}
+            {loading ? "Decrypting..." : "Login"}
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-ui-border">
-          <p className="text-center text-[9px] text-slate-500 mb-4 uppercase tracking-[0.2em] font-black">Operator Quick-Fill</p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => handleQuickFill("admin")}
-              className="text-[10px] bg-ui-dark border border-brand-gold/10 text-brand-gold hover:bg-brand-gold/5 hover:border-brand-gold/30 rounded-lg py-2.5 font-bold uppercase tracking-wider cursor-pointer transition-all"
-            >
-              Master Admin
-            </button>
-            <button
-              onClick={() => handleQuickFill("employee")}
-              className="text-[10px] bg-ui-dark border border-ui-border text-slate-400 hover:bg-slate-900 hover:border-slate-700 rounded-lg py-2.5 font-bold uppercase tracking-wider cursor-pointer transition-all"
-            >
-              Studio Artist
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="absolute bottom-6 text-center z-10">

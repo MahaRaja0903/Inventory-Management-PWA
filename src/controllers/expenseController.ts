@@ -1,7 +1,13 @@
 import { Request, Response } from "express";
 import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
 
-const mapDoc = (doc: any) => ({ ...doc, _id: doc.name });
+const mapDoc = (doc: any) => ({ 
+  ...doc, 
+  _id: doc.name,
+  employeeId: doc.employeeid || doc.employeeId,
+  approvedBy: doc.approvedby || doc.approvedBy,
+  receiptImage: doc.receiptimage || doc.receiptImage
+});
 
 export async function getExpenses(req: Request, res: Response): Promise<void> {
   const user = (req as any).user;
@@ -9,7 +15,7 @@ export async function getExpenses(req: Request, res: Response): Promise<void> {
     let list = await getFrappeDocs("ATS Expense");
     if (user.role !== "Admin") {
       // Employees only see their own submitted expenses
-      list = list.filter((e: any) => e.employeeId === user.id);
+      list = list.filter((e: any) => (e.employeeid || e.employeeId) === user.id);
     }
     res.status(200).json(list.map(mapDoc));
   } catch (error: any) {
@@ -27,7 +33,7 @@ export async function getExpense(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (user.role !== "Admin" && item.employeeId !== user.id) {
+    if (user.role !== "Admin" && (item.employeeid || item.employeeId) !== user.id) {
       res.status(403).json({ message: "Denied. You can only view your own expenses" });
       return;
     }
@@ -42,10 +48,15 @@ export async function createExpense(req: Request, res: Response): Promise<void> 
   const user = (req as any).user;
   try {
     const expenseData = {
-      ...req.body,
-      employeeId: user.id,
+      title: req.body.title,
+      category: req.body.category,
+      amount: req.body.amount,
+      date: req.body.date,
+      notes: req.body.notes,
+      receiptimage: req.body.receiptImage,
+      employeeid: user.id,
       status: user.role === "Admin" ? (req.body.status || "Approved") : "Pending", // Admin expenses can auto-approve
-      approvedBy: user.role === "Admin" ? user.id : undefined
+      approvedby: user.role === "Admin" ? user.id : undefined
     };
 
     const newExpense = await createFrappeDoc("ATS Expense", expenseData);
@@ -76,20 +87,29 @@ export async function updateExpense(req: Request, res: Response): Promise<void> 
     }
 
     // Protection rule
-    if (user.role !== "Admin" && existing.employeeId !== user.id) {
+    if (user.role !== "Admin" && (existing.employeeid || existing.employeeId) !== user.id) {
       res.status(403).json({ message: "Denied. You can only update your own expenses" });
       return;
     }
 
     // Role verification on approval status edit
-    const payload = { ...req.body };
+    const payload: any = { ...req.body };
+    const frappePayload: any = {};
+    if (payload.title !== undefined) frappePayload.title = payload.title;
+    if (payload.category !== undefined) frappePayload.category = payload.category;
+    if (payload.amount !== undefined) frappePayload.amount = payload.amount;
+    if (payload.date !== undefined) frappePayload.date = payload.date;
+    if (payload.notes !== undefined) frappePayload.notes = payload.notes;
+    if (payload.receiptImage !== undefined) frappePayload.receiptimage = payload.receiptImage;
+    if (payload.status !== undefined) frappePayload.status = payload.status;
+
     if (payload.status && payload.status !== existing.status) {
       if (user.role !== "Admin") {
         // Employees cannot approve/reject their own expenses
-        delete payload.status;
+        delete frappePayload.status;
       } else {
         // Admin setting approval
-        payload.approvedBy = user.id;
+        frappePayload.approvedby = user.id;
 
         // Custom notification to employee
         await createFrappeDoc("ATS Notification", {
@@ -100,7 +120,7 @@ export async function updateExpense(req: Request, res: Response): Promise<void> 
       }
     }
 
-    const updated = await updateFrappeDoc("ATS Expense", id, payload);
+    const updated = await updateFrappeDoc("ATS Expense", id, frappePayload);
     res.status(200).json({ message: "Expense updated successfully", expense: mapDoc(updated) });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update expense" });
@@ -117,7 +137,7 @@ export async function deleteExpense(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (user.role !== "Admin" && existing.employeeId !== user.id) {
+    if (user.role !== "Admin" && (existing.employeeid || existing.employeeId) !== user.id) {
       res.status(403).json({ message: "Denied. You can only delete your own submissions" });
       return;
     }

@@ -3,7 +3,7 @@ import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFr
 
 export async function getCustomers(req: Request, res: Response): Promise<void> {
   try {
-    const list = await getFrappeDocs("ATS Customer");
+    const list = await getFrappeDocs("ATS Customer", null, ["name", "name1", "customer_name", "customerName", "mobile", "email", "address", "totalvisits", "totalspending", "totalVisits", "totalSpending"]);
     res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name, name: doc.name1 || doc.customer_name || doc.customerName || doc.name })));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load customers" });
