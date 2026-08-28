@@ -39,6 +39,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
 
   const handleQuickCreateCustomer = async () => {
     if (!newCustomerName || !searchMobile) {
@@ -48,7 +49,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
     try {
       const res = await apiFetch<any>("/customers", {
         method: "POST",
-        body: JSON.stringify({ name: newCustomerName, mobile: searchMobile, email: newCustomerEmail, address: "" })
+        body: JSON.stringify({ name: newCustomerName, mobile: searchMobile, email: newCustomerEmail, address: newCustomerAddress })
       });
       showToast("Customer created successfully!", "success");
       await fetchData();
@@ -56,6 +57,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
       setShowCreateCustomer(false);
       setNewCustomerName("");
       setNewCustomerEmail("");
+      setNewCustomerAddress("");
     } catch (err: any) {
       showToast(err.message || "Failed to create customer.", "error");
     }
@@ -72,7 +74,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
       ]);
       setSales(salesData);
       setCustomers(customerData);
-      setInventory(invData.filter(i => i.quantity > 0));
+      setInventory(invData);
       // Filter active employees list
       setStaff(staffData.filter(s => s.role === "Employee" || s.role === "Admin"));
     } catch {
@@ -239,6 +241,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
                     </div>
                     <input type="text" placeholder="Full Name" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none" />
                     <input type="email" placeholder="Email Address (Optional)" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none" />
+                    <input type="text" placeholder="Address (Optional)" value={newCustomerAddress} onChange={e => setNewCustomerAddress(e.target.value)} className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs text-white focus:border-amber-500/50 outline-none" />
                     <button type="button" onClick={handleQuickCreateCustomer} className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-bold uppercase transition-colors">Save & Link</button>
                   </div>
                 )}

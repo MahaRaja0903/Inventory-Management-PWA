@@ -65,8 +65,8 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
         
         if (!isNaN(targetLat) && !isNaN(targetLon)) {
           const distance = getDistanceFromLatLonInM(lat, lon, targetLat, targetLon);
-          if (distance > 2) { 
-             res.status(400).json({ message: `You must be within 2 meters from the Store Radius.` });
+          if (distance > 5) { 
+             res.status(400).json({ message: `You must be within 5 meters from the Store Radius.` });
              return;
           }
         }
@@ -167,7 +167,7 @@ export async function getAttendance(req: Request, res: Response): Promise<void> 
       const emp = users.find((u: any) => u.name === item.employeeId);
       return {
         ...item,
-        employeeName: emp ? (emp.full_name || emp.name_field || emp.name) : "Unknown Employee",
+        employeeName: emp ? (emp.name1 || emp.name) : "Unknown Employee",
         employeeEmail: emp ? emp.email : ""
       };
     });
@@ -198,7 +198,7 @@ export async function getAttendanceHistory(req: Request, res: Response): Promise
       const emp = users.find((u: any) => u.name === item.employeeId);
       return {
         ...item,
-        employeeName: emp ? (emp.full_name || emp.name_field || emp.name) : "Unknown Employee"
+        employeeName: emp ? (emp.name1 || emp.name) : "Unknown Employee"
       };
     });
 

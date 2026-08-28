@@ -7,15 +7,17 @@ export async function getSales(req: Request, res: Response): Promise<void> {
     const list = rawSales.map((doc: any) => ({
       ...doc,
       _id: doc.name,
+      customerId: doc.customerid || doc.customerId,
+      employeeId: doc.employeeid || doc.employeeId,
       finalAmount: doc.finalamount !== undefined ? doc.finalamount : doc.finalAmount,
       createdAt: doc.creation
     }));
     
     // Enrich with names
-    const rawCustomers = await getFrappeDocs("ATS Customer", null, ["name", "name1", "customer_name", "customerName", "mobile"]);
+    const rawCustomers = await getFrappeDocs("ATS Customer", null, ["name", "name1", "mobile"]);
     const customers = rawCustomers.map((doc: any) => ({ ...doc, _id: doc.name }));
     
-    const rawUsers = await getFrappeDocs("ATS User", null, ["name", "full_name", "name_field", "fullName"]);
+    const rawUsers = await getFrappeDocs("ATS User", null, ["name", "name1", "email"]);
     const users = rawUsers.map((doc: any) => ({ ...doc, _id: doc.name }));
 
     const enriched = list.map((item: any) => {
@@ -23,9 +25,9 @@ export async function getSales(req: Request, res: Response): Promise<void> {
       const artist = users.find((u: any) => u._id === item.employeeId);
       return {
         ...item,
-        customerName: client ? client.name1 || client.customer_name || client.customerName || client.name : "Walk-In Client",
+        customerName: client ? client.name1 || client.name : "Walk-In Client",
         customerMobile: client ? client.mobile : "",
-        employeeName: artist ? artist.full_name || artist.name_field || artist.fullName || artist.name : "Unknown Artist"
+        employeeName: artist ? artist.name1 || artist.name : "Unknown Artist"
       };
     });
 
@@ -44,6 +46,8 @@ export async function getSale(req: Request, res: Response): Promise<void> {
       return;
     }
     sale._id = sale.name;
+    sale.customerId = sale.customerid || sale.customerId;
+    sale.employeeId = sale.employeeid || sale.employeeId;
     sale.finalAmount = sale.finalamount !== undefined ? sale.finalamount : sale.finalAmount;
     sale.createdAt = sale.creation;
     res.status(200).json(sale);
@@ -70,13 +74,19 @@ export async function createSale(req: Request, res: Response): Promise<void> {
 
     const newSale = await createFrappeDoc("ATS Sale", {
       customerId: customerId || "",
+      customerid: customerId || "",
       employeeId: targetArtistId,
+      employeeid: targetArtistId,
       serviceType,
+      servicetype: serviceType,
       amount: calcAmount,
       discount: calcDiscount,
       finalamount,
+      finalAmount: finalamount,
       paymentMethod: paymentMethod || "UPI",
-      itemsUsed: itemsUsed || []
+      paymentmethod: paymentMethod || "UPI",
+      itemsUsed: itemsUsed || [],
+      itemsused: itemsUsed || []
     });
     newSale._id = newSale.name;
     newSale.finalAmount = finalamount;
@@ -120,7 +130,7 @@ export async function createSale(req: Request, res: Response): Promise<void> {
     if (customerId) {
       try {
         const client = await getFrappeDoc("ATS Customer", customerId);
-        clientName = client.customerName || client.name || "Walk-In";
+        clientName = client.name1 || client.name || "Walk-In";
       } catch (e) {
         console.error("Failed to fetch customer for notification", e);
       }
@@ -152,6 +162,12 @@ export async function updateSale(req: Request, res: Response): Promise<void> {
       const discount = payload.discount !== undefined ? Number(payload.discount) : oldSale.discount;
       payload.finalamount = Math.max(0, amount - discount);
     }
+    
+    if (payload.customerId !== undefined) payload.customerid = payload.customerId;
+    if (payload.employeeId !== undefined) payload.employeeid = payload.employeeId;
+    if (payload.serviceType !== undefined) payload.servicetype = payload.serviceType;
+    if (payload.paymentMethod !== undefined) payload.paymentmethod = payload.paymentMethod;
+    if (payload.itemsUsed !== undefined) payload.itemsused = payload.itemsUsed;
     const updated = await updateFrappeDoc("ATS Sale", id, payload);
     if (!updated) {
       res.status(404).json({ message: "Sale transaction log not found" });

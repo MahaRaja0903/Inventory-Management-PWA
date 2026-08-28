@@ -3,8 +3,8 @@ import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFr
 
 export async function getCustomers(req: Request, res: Response): Promise<void> {
   try {
-    const list = await getFrappeDocs("ATS Customer", null, ["name", "name1", "customer_name", "customerName", "mobile", "email", "address", "totalvisits", "totalspending", "totalVisits", "totalSpending"]);
-    res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name, name: doc.name1 || doc.customer_name || doc.customerName || doc.name })));
+    const list = await getFrappeDocs("ATS Customer", null, ["name", "name1", "mobile", "email", "address", "totalvisits", "totalspending"]);
+    res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name, name: doc.name1 || doc.name, totalVisits: doc.totalvisits, totalSpending: doc.totalspending })));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load customers" });
   }
@@ -19,7 +19,7 @@ export async function getCustomer(req: Request, res: Response): Promise<void> {
       return;
     }
     customer._id = customer.name;
-    customer.name = customer.name1 || customer.customer_name || customer.customerName || customer.name;
+    customer.name = customer.name1 || customer.name;
 
     const allHistory = await getFrappeDocs("ATS Customer History");
     const history = allHistory.filter((h: any) => h.customerId === id);
@@ -31,7 +31,7 @@ export async function getCustomer(req: Request, res: Response): Promise<void> {
       return {
         ...h,
         _id: h.name,
-        employeeName: artist ? (artist.full_name || artist.name_field || artist.name) : "Unknown Artist"
+        employeeName: artist ? (artist.name1 || artist.name) : "Unknown Artist"
       };
     });
 
@@ -64,18 +64,16 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
     const newCustomer = await createFrappeDoc("ATS Customer", {
       name,
       name1: name,
-      customer_name: name,
-      customerName: name,
       mobile,
       email: email || "",
       address: address || "",
-      totalVisits: 0,
-      totalSpending: 0
+      totalvisits: 0,
+      totalspending: 0
     });
 
     if (newCustomer) {
       newCustomer._id = newCustomer.name;
-      newCustomer.name = newCustomer.name1 || newCustomer.customer_name || newCustomer.customerName || newCustomer.name;
+      newCustomer.name = newCustomer.name1 || newCustomer.name;
     }
 
     res.status(201).json({ message: "Customer created successfully", customer: newCustomer });
@@ -90,8 +88,6 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
     const payload = { ...req.body };
     if (payload.name) {
       payload.name1 = payload.name;
-      payload.customer_name = payload.name;
-      payload.customerName = payload.name;
     }
 
     const updated = await updateFrappeDoc("ATS Customer", id, payload);
@@ -100,7 +96,7 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
       return;
     }
     updated._id = updated.name;
-    updated.name = updated.name1 || updated.customer_name || updated.customerName || updated.name;
+    updated.name = updated.name1 || updated.name;
     res.status(200).json({ message: "Customer profile updated successfully", customer: updated });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update profile" });

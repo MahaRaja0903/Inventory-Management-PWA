@@ -20,7 +20,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
   // Create Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("Rent/Facilities");
+  const [category, setCategory] = useState("Rent");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
@@ -44,7 +44,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
 
   const openSubmitModal = () => {
     setTitle("");
-    setCategory("Rent/Facilities");
+    setCategory("Rent");
     setAmount("");
     setDate(new Date().toISOString().split("T")[0]);
     setNotes("");
@@ -121,8 +121,8 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
     return matchesCategory && matchesStatus;
   });
 
-  const RentCategory = "Rent/Facilities";
-  const uniqueCategories = ["All", RentCategory, "Sanitation", "Aftercare Promo", "Design Equipment", "Studio Upkeep", "General Supplies"];
+  const RentCategory = "Rent";
+  const uniqueCategories = ["All", RentCategory, "Sanitation", "Supplies", "Utilities", "Marketing", "Other"];
 
   return (
     <div className="space-y-6 font-sans">
@@ -155,12 +155,12 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
             className="w-full px-3 py-2 bg-slate-950 border border-slate-705 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
           >
             <option value="All">All Categories</option>
-            <option value="Rent/Facilities">Rent & Facilities</option>
-            <option value="Sanitation">Sanitation Materials</option>
-            <option value="Aftercare Promo">Aftercare Promo/Trading Goods</option>
-            <option value="Design Equipment">Design Equipment & Needle Cartridge</option>
-            <option value="Studio Upkeep">Studio Upkeep & Refreshments</option>
-            <option value="General Supplies">General Supplies</option>
+            <option value="Rent">Rent</option>
+            <option value="Sanitation">Sanitation</option>
+            <option value="Supplies">Supplies</option>
+            <option value="Utilities">Utilities</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Other">Other</option>
           </select>
         </div>
 
@@ -311,12 +311,12 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full px-2 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
                   >
-                    <option value="Rent/Facilities">Rent & Facilities</option>
-                    <option value="Sanitation">Sanitation Materials</option>
-                    <option value="Aftercare Promo">Aftercare Trading</option>
-                    <option value="Design Equipment">Design Equipment</option>
-                    <option value="Studio Upkeep">Studio Upkeep</option>
-                    <option value="General Supplies">General Supplies</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Sanitation">Sanitation</option>
+                    <option value="Supplies">Supplies</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
 

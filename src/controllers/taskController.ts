@@ -40,10 +40,14 @@ async function syncDailyTasks() {
           title: template.title,
           description: template.description,
           assignedTo: template.assignedTo,
+          assignedto: template.assignedTo,
           assignedBy: template.assignedBy,
+          assignedby: template.assignedBy,
           priority: template.priority,
           taskType: "Daily Task",
+          tasktype: "Daily Task",
           dueDate: todayStr,
+          duedate: todayStr,
           status: "Pending",
           notes: template.notes || ""
         });
@@ -78,12 +82,20 @@ export async function getTasks(req: Request, res: Response): Promise<void> {
   try {
     let list = await getFrappeDocs("ATS Task");
     
+    list = list.map((doc: any) => ({ 
+      ...doc, 
+      _id: doc.name,
+      assignedTo: doc.assignedto || doc.assignedTo,
+      assignedBy: doc.assignedby || doc.assignedBy,
+      taskType: doc.tasktype || doc.taskType,
+      dueDate: doc.duedate || doc.dueDate 
+    }));
+    
     if (employee) list = list.filter((t: any) => t.assignedTo === employee);
     if (status) list = list.filter((t: any) => t.status === status);
     if (priority) list = list.filter((t: any) => t.priority === priority);
     if (date) list = list.filter((t: any) => t.dueDate === date);
 
-    list = list.map((doc: any) => ({ ...doc, _id: doc.name }));
     list.sort((a: any, b: any) => new Date(b.creation || 0).getTime() - new Date(a.creation || 0).getTime());
     
     res.status(200).json(list);
@@ -103,8 +115,15 @@ export async function getMyTasks(req: Request, res: Response): Promise<void> {
 
   try {
     let list = await getFrappeDocs("ATS Task");
+    list = list.map((doc: any) => ({ 
+      ...doc, 
+      _id: doc.name,
+      assignedTo: doc.assignedto || doc.assignedTo,
+      assignedBy: doc.assignedby || doc.assignedBy,
+      taskType: doc.tasktype || doc.taskType,
+      dueDate: doc.duedate || doc.dueDate 
+    }));
     list = list.filter((t: any) => t.assignedTo === reqUser.id);
-    list = list.map((doc: any) => ({ ...doc, _id: doc.name }));
     list.sort((a: any, b: any) => new Date(b.creation || 0).getTime() - new Date(a.creation || 0).getTime());
     
     res.status(200).json(list);
@@ -132,10 +151,14 @@ export async function createTask(req: Request, res: Response): Promise<void> {
       title,
       description: description || "",
       assignedTo,
+      assignedto: assignedTo,
       assignedBy: reqUser.id,
+      assignedby: reqUser.id,
       priority: priority || "Medium",
       taskType: taskType || "One Time Task",
+      tasktype: taskType || "One Time Task",
       dueDate,
+      duedate: dueDate,
       status: "Pending",
       notes: notes || ""
     });
@@ -223,7 +246,11 @@ export async function updateTask(req: Request, res: Response): Promise<void> {
   }
 
   const { id } = req.params;
-  const updates = req.body;
+  const updates: any = { ...req.body };
+  if (updates.assignedTo !== undefined) updates.assignedto = updates.assignedTo;
+  if (updates.assignedBy !== undefined) updates.assignedby = updates.assignedBy;
+  if (updates.taskType !== undefined) updates.tasktype = updates.taskType;
+  if (updates.dueDate !== undefined) updates.duedate = updates.dueDate;
 
   try {
     const updated = await updateFrappeDoc("ATS Task", id, updates);

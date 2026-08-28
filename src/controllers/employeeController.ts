@@ -48,6 +48,7 @@ export async function createEmployee(req: Request, res: Response): Promise<void>
     const hashedPassword = bcrypt.hashSync(rawPass, salt);
 
     const newEmployee = await createFrappeDoc("ATS User", {
+      name1: name,
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
@@ -63,7 +64,7 @@ export async function createEmployee(req: Request, res: Response): Promise<void>
       message: "Employee registered successfully",
       employee: {
         id: newEmployee._id,
-        name: newEmployee.full_name || newEmployee.name_field || newEmployee.name,
+        name: newEmployee.name1 || newEmployee.name,
         email: newEmployee.email,
         role: newEmployee.role,
         phone: newEmployee.phone,
@@ -88,7 +89,10 @@ export async function updateEmployee(req: Request, res: Response): Promise<void>
     }
 
     const updates: any = {};
-    if (name !== undefined) updates.name = name;
+    if (name !== undefined) {
+      updates.name = name;
+      updates.name1 = name;
+    }
     if (email !== undefined) updates.email = email.toLowerCase();
     if (role !== undefined) updates.role = role;
     if (phone !== undefined) updates.phone = phone;
