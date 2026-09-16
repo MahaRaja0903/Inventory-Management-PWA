@@ -1,11 +1,44 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
+import { toApp, toAppList, toFrappe } from "../config/fieldMap";
 
-export async function getEmployees(req: Request, res: Response): Promise<void> {
+const DOCTYPE = "ATS User";
+const FRAPPE_USER_DOCTYPE = "User";
+
+/** Never let a password hash reach a client, whatever the caller's role. */
+function publicView(employee: any): any {
+  if (!employee) return employee;
+  const { password, ...safe } = employee;
+  return safe;
+}
+
+/**
+ * `ATS User.email` is a Link to Frappe's built-in User doctype, so an ATS profile can
+ * only exist for an email that is already a registered Frappe user. The app never
+ * created that underlying user, so every "Add Employee" failed on link validation.
+ *
+ * This creates the Frappe user first when it's missing, then the ATS profile.
+ */
+async function ensureFrappeUser(email: string, fullName: string): Promise<void> {
+  const existing = await getFrappeDoc(FRAPPE_USER_DOCTYPE, email);
+  if (existing) return;
+
+  const [firstName, ...rest] = fullName.trim().split(/\s+/);
+  await createFrappeDoc(FRAPPE_USER_DOCTYPE, {
+    email,
+    first_name: firstName || email,
+    last_name: rest.join(" ") || undefined,
+    enabled: 1,
+    send_welcome_email: 0,
+    user_type: "Website User",
+  });
+}
+
+export async function getEmployees(_req: Request, res: Response): Promise<void> {
   try {
-    const list = await getFrappeDocs("ATS User");
-    res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name })));
+    const list = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE));
+    res.status(200).json(list.map(publicView));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load employees" });
   }
@@ -14,13 +47,12 @@ export async function getEmployees(req: Request, res: Response): Promise<void> {
 export async function getEmployee(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const employee = await getFrappeDoc("ATS User", id);
+    const employee = toApp(DOCTYPE, await getFrappeDoc(DOCTYPE, id));
     if (!employee) {
       res.status(404).json({ message: "Employee record not found" });
       return;
     }
-    employee._id = employee.name;
-    res.status(200).json(employee);
+    res.status(200).json(publicView(employee));
   } catch (error: any) {
     res.status(500).json({ message: "Error locating employee" });
   }
@@ -30,84 +62,88 @@ export async function createEmployee(req: Request, res: Response): Promise<void>
   const { name, email, password, role, phone, status, profileImage } = req.body;
 
   if (!name || !email) {
-    res.status(400).json({ message: "Name and email are required to registers employee" });
+    res.status(400).json({ message: "Name and email are required to register an employee" });
     return;
   }
 
+  const normalisedEmail = String(email).trim().toLowerCase();
+
   try {
-    const allUsers = await getFrappeDocs("ATS User");
-    const existing = allUsers.find((u: any) => u.email === email.toLowerCase());
-    
+    const existing = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE)).find(
+      (u: any) => String(u.email || "").toLowerCase() === normalisedEmail
+    );
+
     if (existing) {
-      res.status(400).json({ message: "An employee with this email already exists" });
+      res.status(409).json({ message: "An employee with this email already exists" });
       return;
     }
 
-    const salt = bcrypt.genSaltSync(10);
-    const rawPass = password || "Test@123";
-    const hashedPassword = bcrypt.hashSync(rawPass, salt);
+    try {
+      await ensureFrappeUser(normalisedEmail, name);
+    } catch (error: any) {
+      res.status(400).json({
+        message: `Could not create the underlying account for ${normalisedEmail}. ${error.message}`,
+      });
+      return;
+    }
 
-    const newEmployee = await createFrappeDoc("ATS User", {
-      name1: name,
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role: role || "Employee",
-      phone: phone || "",
-      status: status || "Active",
-      profileImage: profileImage || undefined
-    });
+    const hashedPassword = bcrypt.hashSync(password || "Test@123", bcrypt.genSaltSync(10));
 
-    if (newEmployee) newEmployee._id = newEmployee.name;
+    const newEmployee = toApp<any>(
+      DOCTYPE,
+      await createFrappeDoc(
+        DOCTYPE,
+        toFrappe(DOCTYPE, {
+          name,
+          email: normalisedEmail,
+          password: hashedPassword,
+          role: role || "Employee",
+          phone: phone || "",
+          status: status || "Active",
+          profileImage: profileImage || "",
+        })
+      )
+    );
 
     res.status(201).json({
       message: "Employee registered successfully",
-      employee: {
-        id: newEmployee._id,
-        name: newEmployee.name1 || newEmployee.name,
-        email: newEmployee.email,
-        role: newEmployee.role,
-        phone: newEmployee.phone,
-        status: newEmployee.status,
-        profileImage: newEmployee.profileImage
-      }
+      employee: publicView(newEmployee),
     });
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Failed to registers employee" });
+    res.status(400).json({ message: error.message || "Failed to register employee" });
   }
 }
 
 export async function updateEmployee(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { name, email, password, role, phone, status, profileImage } = req.body;
+  const { email, password } = req.body;
 
   try {
-    const existing = await getFrappeDoc("ATS User", id);
+    const existing = await getFrappeDoc(DOCTYPE, id);
     if (!existing) {
       res.status(404).json({ message: "Employee not found" });
       return;
     }
 
-    const updates: any = {};
-    if (name !== undefined) {
-      updates.name = name;
-      updates.name1 = name;
-    }
-    if (email !== undefined) updates.email = email.toLowerCase();
-    if (role !== undefined) updates.role = role;
-    if (phone !== undefined) updates.phone = phone;
-    if (status !== undefined) updates.status = status;
-    if (profileImage !== undefined) updates.profileImage = profileImage;
+    const updates = toFrappe(DOCTYPE, {
+      ...req.body,
+      email: email !== undefined ? String(email).trim().toLowerCase() : undefined,
+    });
 
+    // Only touch the password when a new one was actually supplied — the edit form
+    // sends an empty string to mean "leave it alone".
     if (password) {
-      const salt = bcrypt.genSaltSync(10);
-      updates.password = bcrypt.hashSync(password, salt);
+      updates.password = bcrypt.hashSync(password, bcrypt.genSaltSync(10));
+    } else {
+      delete updates.password;
     }
 
-    const updated = await updateFrappeDoc("ATS User", id, updates);
-    if (updated) updated._id = updated.name;
-    
-    res.status(200).json({ message: "Employee updated successfully", employee: updated });
+    if (updates.email && updates.email !== existing.email) {
+      await ensureFrappeUser(updates.email, req.body.name || existing.name1 || updates.email);
+    }
+
+    const updated = toApp(DOCTYPE, await updateFrappeDoc(DOCTYPE, id, updates));
+    res.status(200).json({ message: "Employee updated successfully", employee: publicView(updated) });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update employee" });
   }
@@ -115,18 +151,21 @@ export async function updateEmployee(req: Request, res: Response): Promise<void>
 
 export async function deleteEmployee(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  try {
-    const requestingUser = (req as any).user;
-    if (requestingUser && requestingUser.id === id) {
-      res.status(400).json({ message: "Cannot delete your own active administrator account" });
-      return;
-    }
+  const requestingUser = (req as any).user;
 
-    const success = await deleteFrappeDoc("ATS User", id);
-    if (!success) {
+  if (requestingUser && requestingUser.id === id) {
+    res.status(400).json({ message: "Cannot delete your own active administrator account" });
+    return;
+  }
+
+  try {
+    const existing = await getFrappeDoc(DOCTYPE, id);
+    if (!existing) {
       res.status(404).json({ message: "Employee not found" });
       return;
     }
+
+    await deleteFrappeDoc(DOCTYPE, id);
     res.status(200).json({ message: "Employee deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to delete employee" });

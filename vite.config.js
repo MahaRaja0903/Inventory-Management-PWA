@@ -11,7 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        includeAssets: ['logo.jpeg'],
         manifest: {
           name: 'Aquarius Tattoo Studio',
           short_name: 'Aquarius',
@@ -19,16 +19,14 @@ export default defineConfig(() => {
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',
+          // One source image declared as "any size" — claiming 192x192 and 512x512
+          // for the same file made installers pick a wrongly-scaled icon.
           icons: [
             {
               src: '/logo.jpeg',
-              sizes: '192x192',
-              type: 'image/jpeg'
-            },
-            {
-              src: '/logo.jpeg',
-              sizes: '512x512',
-              type: 'image/jpeg'
+              sizes: 'any',
+              type: 'image/jpeg',
+              purpose: 'any'
             }
           ]
         }

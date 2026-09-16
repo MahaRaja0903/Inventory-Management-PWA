@@ -4,72 +4,96 @@ import {
   getFrappeDoc,
   createFrappeDoc,
   updateFrappeDoc,
-  deleteFrappeDoc
+  deleteFrappeDoc,
 } from "../config/frappeClient";
+import { toApp, toAppList, toFrappe } from "../config/fieldMap";
+import { deriveStockStatus } from "../lib/stock";
+import { notify } from "../lib/notify";
 
-// Optionally we can define the DocType names here
-const INVENTORY_DOCTYPE = "ATS Inventory Item";
-const NOTIFICATION_DOCTYPE = "ATS Notification";
+const DOCTYPE = "ATS Inventory Item";
 
-export async function getInventory(req: Request, res: Response): Promise<void> {
+/**
+ * `tattoo_item_group` is a Frappe Link field, not free text. Saving a category that
+ * isn't a registered group fails with a raw LinkValidationError stack trace, which is
+ * what made "Add Item" unusable. Categories are now served to the form as a dropdown
+ * and validated here so a bad value produces a readable message.
+ */
+const CATEGORY_DOCTYPE = "Tattoo Item Group";
+
+async function listCategories(): Promise<string[]> {
+  const groups = await getFrappeDocs(CATEGORY_DOCTYPE, null, ["name"]);
+  return groups.map((g: any) => g.name);
+}
+
+export async function getCategories(_req: Request, res: Response): Promise<void> {
   try {
-    const list = await getFrappeDocs(INVENTORY_DOCTYPE);
-    
-    // Map Frappe's properties to the frontend `InventoryItem` interface
-    const mappedList = list.map(item => ({ 
-      ...item, 
-      _id: item.name,
-      itemName: item.itemname || item.itemName || "",
-      category: item.tattoo_item_group || item.category || "",
-      quantity: item.actual_quantity !== undefined ? item.actual_quantity : (item.quantity || 0),
-      purchasePrice: item.purchaseprice !== undefined ? item.purchaseprice : (item.purchasePrice || 0),
-      stockStatus: item.stockstatus || item.stockStatus || "Out of Stock"
-    }));
-    
-    res.status(200).json(mappedList);
+    res.status(200).json(await listCategories());
+  } catch (error: any) {
+    res.status(500).json({ message: "Failed to load inventory categories" });
+  }
+}
+
+export async function getInventory(_req: Request, res: Response): Promise<void> {
+  try {
+    res.status(200).json(toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE)));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load inventory" });
   }
 }
 
 export async function getInventoryItem(req: Request, res: Response): Promise<void> {
-  const { id } = req.params; // ID is the 'name' in Frappe
+  const { id } = req.params;
   try {
-    const item = await getFrappeDoc(INVENTORY_DOCTYPE, id);
+    const item = toApp(DOCTYPE, await getFrappeDoc(DOCTYPE, id));
     if (!item) {
       res.status(404).json({ message: "Inventory item not found" });
       return;
     }
-    res.status(200).json({ ...item, _id: item.name });
+    res.status(200).json(item);
   } catch (error: any) {
     res.status(500).json({ message: "Error finding item" });
   }
 }
 
 export async function createInventoryItem(req: Request, res: Response): Promise<void> {
-  const user = (req as any).user;
-  try {
-    const data = { 
-      ...req.body, 
-      createdBy: user.id,
-      itemname: req.body.itemName,
-      tattoo_item_group: req.body.category,
-      actual_quantity: req.body.quantity,
-      purchaseprice: req.body.purchasePrice,
-      stockstatus: req.body.stockStatus || "Out of Stock"
-    };
-    
-    // Create doc in Frappe
-    const newItem = await createFrappeDoc(INVENTORY_DOCTYPE, data);
-    newItem._id = newItem.name;
+  const { itemName, category, quantity, purchasePrice } = req.body;
 
-    // If item is created at 0 stock, notify
-    if (newItem.stockstatus === "Out of Stock" || newItem.stockStatus === "Out of Stock") {
-      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
-        title: "Item Out of Stock!",
-        description: `New inventory item "${newItem.itemname || newItem.itemName}" was logged with 0 quantity.`,
+  if (!itemName || !category) {
+    res.status(400).json({ message: "Item Name and Category are required fields" });
+    return;
+  }
+
+  try {
+    const categories = await listCategories();
+    if (!categories.includes(category)) {
+      res.status(400).json({
+        message: `"${category}" is not a valid category. Choose one of: ${categories.join(", ")}`,
+      });
+      return;
+    }
+
+    const qty = Number(quantity) || 0;
+    const stockStatus = deriveStockStatus(qty);
+
+    const newItem = toApp<any>(
+      DOCTYPE,
+      await createFrappeDoc(
+        DOCTYPE,
+        toFrappe(DOCTYPE, {
+          itemName,
+          category,
+          quantity: qty,
+          purchasePrice: Number(purchasePrice) || 0,
+          stockStatus,
+        })
+      )
+    );
+
+    if (stockStatus === "Out of Stock") {
+      await notify({
+        title: "Item Out of Stock",
+        description: `New inventory item "${itemName}" was logged with 0 quantity.`,
         type: "danger",
-        isRead: 0
       });
     }
 
@@ -81,45 +105,49 @@ export async function createInventoryItem(req: Request, res: Response): Promise<
 
 export async function updateInventoryItem(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
+
   try {
-    // Remove _id from body if it's there to avoid Frappe trying to update the PK
-    const { _id, name, ...updateData } = req.body;
-    
-    const frappeUpdateData = {
-      ...updateData,
-    };
-    if (updateData.itemName !== undefined) frappeUpdateData.itemname = updateData.itemName;
-    if (updateData.category !== undefined) frappeUpdateData.tattoo_item_group = updateData.category;
-    if (updateData.quantity !== undefined) frappeUpdateData.actual_quantity = updateData.quantity;
-    if (updateData.purchasePrice !== undefined) frappeUpdateData.purchaseprice = updateData.purchasePrice;
-    if (updateData.stockStatus !== undefined) frappeUpdateData.stockstatus = updateData.stockStatus;
-    
-    const updated = await updateFrappeDoc(INVENTORY_DOCTYPE, id, frappeUpdateData);
-    if (!updated) {
+    const existing = toApp<any>(DOCTYPE, await getFrappeDoc(DOCTYPE, id));
+    if (!existing) {
       res.status(404).json({ message: "Item not found" });
       return;
     }
-    updated._id = updated.name;
 
-    const currentStatus = updated.stockstatus || updated.stockStatus;
-    const currentName = updated.itemname || updated.itemName;
-    const currentQty = updated.actual_quantity !== undefined ? updated.actual_quantity : updated.quantity;
+    if (req.body.category !== undefined) {
+      const categories = await listCategories();
+      if (!categories.includes(req.body.category)) {
+        res.status(400).json({
+          message: `"${req.body.category}" is not a valid category. Choose one of: ${categories.join(", ")}`,
+        });
+        return;
+      }
+    }
 
-    // Dynamic stock warning trigger
-    if (currentStatus === "Low Stock") {
-      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
-        title: "Low Stock Alert",
-        description: `Item "${currentName}" has only ${currentQty} units left!`,
-        type: "warning",
-        isRead: 0
-      });
-    } else if (currentStatus === "Out of Stock") {
-      await createFrappeDoc(NOTIFICATION_DOCTYPE, {
-        title: "Out Of Stock Warning",
-        description: `Item "${currentName}" is completely out of stock!`,
-        type: "danger",
-        isRead: 0
-      });
+    const payload = toFrappe(DOCTYPE, req.body);
+
+    // Status always follows quantity, so it can never drift out of step with stock.
+    const nextQty =
+      req.body.quantity !== undefined ? Number(req.body.quantity) : Number(existing.quantity) || 0;
+    const nextStatus = deriveStockStatus(nextQty);
+    payload.stockstatus = nextStatus;
+
+    const updated = toApp<any>(DOCTYPE, await updateFrappeDoc(DOCTYPE, id, payload));
+
+    // Only announce a status change, so an unrelated edit doesn't re-raise the alert.
+    if (nextStatus !== existing.stockStatus) {
+      if (nextStatus === "Low Stock") {
+        await notify({
+          title: "Low Stock Alert",
+          description: `Item "${updated.itemName}" has only ${nextQty} units left.`,
+          type: "warning",
+        });
+      } else if (nextStatus === "Out of Stock") {
+        await notify({
+          title: "Out Of Stock Warning",
+          description: `Item "${updated.itemName}" is completely out of stock.`,
+          type: "danger",
+        });
+      }
     }
 
     res.status(200).json({ message: "Inventory item updated successfully", item: updated });
@@ -131,11 +159,12 @@ export async function updateInventoryItem(req: Request, res: Response): Promise<
 export async function deleteInventoryItem(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const success = await deleteFrappeDoc(INVENTORY_DOCTYPE, id);
-    if (!success) {
+    const existing = await getFrappeDoc(DOCTYPE, id);
+    if (!existing) {
       res.status(404).json({ message: "Item not found" });
       return;
     }
+    await deleteFrappeDoc(DOCTYPE, id);
     res.status(200).json({ message: "Inventory item deleted successfully" });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to delete item" });

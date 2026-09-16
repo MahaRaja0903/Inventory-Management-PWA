@@ -25,14 +25,23 @@ export async function frappeLogin(usr: string, pwd: string): Promise<boolean> {
 /**
  * Helper to fetch a list of documents from Frappe.
  */
-export async function getFrappeDocs(docType: string, filters?: any, fields: string[] = ['*']): Promise<any[]> {
+export async function getFrappeDocs(
+  docType: string,
+  filters?: any,
+  fields: string[] = ['*'],
+  /** Required when docType is a child table — Frappe rejects the read without it. */
+  parentDocType?: string
+): Promise<any[]> {
   try {
     const params: any = {
       fields: JSON.stringify(fields),
-      limit_page_length: 1000 // default max
+      limit_page_length: 0 // 0 = no limit; 1000 silently truncated larger datasets
     };
     if (filters) {
       params.filters = JSON.stringify(filters);
+    }
+    if (parentDocType) {
+      params.parent = parentDocType;
     }
     
     const response = await axios.get(`${FRAPPE_URL}/${docType}`, {

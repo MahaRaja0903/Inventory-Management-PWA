@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, User } from "../types";
+import { AuthUser, User, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
 import { UserRoundCog, Search, Plus, Edit2, Trash2, X, Save, Shield, CheckCircle2, XCircle } from "lucide-react";
 
 interface EmployeesViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function EmployeesView({ user }: EmployeesViewProps) {
+export default function EmployeesView({ user, showToast }: EmployeesViewProps) {
   const [employees, setEmployees] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,7 +71,7 @@ export default function EmployeesView({ user }: EmployeesViewProps) {
 
   const handleDelete = async (empId: string) => {
     if (empId === user.id) {
-      alert("You are not allowed to delete your own logged-in admin account!");
+      showToast("You cannot delete your own account.", "warning");
       return;
     }
     if (!confirm("Are you sure you want to delete this staff member? This will clear all their linked record accounts.")) {
@@ -80,14 +81,14 @@ export default function EmployeesView({ user }: EmployeesViewProps) {
       await apiFetch(`/employees/${empId}`, { method: "DELETE" });
       await fetchEmployees();
     } catch (err: any) {
-      alert(err.message || "Failed to delete staff member.");
+      showToast(err.message || "Failed to delete staff member.", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email) {
-      alert("Name and Email are required fields.");
+      showToast("Name and email are required.", "warning");
       return;
     }
 
@@ -117,17 +118,20 @@ export default function EmployeesView({ user }: EmployeesViewProps) {
         });
       }
       setIsModalOpen(false);
+      showToast(editingEmployee ? "Staff member updated." : "Staff member added.");
       await fetchEmployees();
     } catch (err: any) {
-      alert(err.message || "Operation failed.");
+      showToast(err.message || "Could not save the staff member.", "error");
     }
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.phone.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // A record with no phone or email used to throw here and blank the whole page.
+  const filteredEmployees = employees.filter(emp => {
+    const needle = searchTerm.toLowerCase();
+    return [emp.name, emp.email, emp.phone].some(field =>
+      String(field || "").toLowerCase().includes(needle)
+    );
+  });
 
   return (
     <div className="space-y-6 font-sans">

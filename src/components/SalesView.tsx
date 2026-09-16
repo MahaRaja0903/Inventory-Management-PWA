@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { AuthUser, Customer, Sale, User, InventoryItem, SaleItem } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
+import { formatDate, getTime } from "../lib/datetime";
 import { Receipt, Search, Plus, Trash2, X, Sparkles, Check, CheckCircle2, UserCheck, DollarSign, Package } from "lucide-react";
 
 interface SalesViewProps {
@@ -59,6 +61,17 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
       setNewCustomerEmail("");
       setNewCustomerAddress("");
     } catch (err: any) {
+      // A 409 carries the customer that already owns this mobile number, so select
+      // them rather than making the artist start over.
+      const existing = err?.status === 409 ? err?.data?.customer : null;
+      if (existing?._id) {
+        await fetchData();
+        setCustomerId(existing._id);
+        setShowCreateCustomer(false);
+        setSearchMobile("");
+        showToast(`${existing.name} is already registered — selected them for this sale.`, "info");
+        return;
+      }
       showToast(err.message || "Failed to create customer.", "error");
     }
   };
@@ -162,8 +175,8 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
     try {
       await apiFetch(`/sales/${id}`, { method: "DELETE" });
       await fetchData();
-    } catch {
-      alert("Error deleting record.");
+    } catch (err: any) {
+      showToast(err.message || "Could not delete the transaction.", "error");
     }
   };
 
@@ -212,8 +225,8 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
                     />
                     {searchMobile.length > 2 && (
                       <div className="absolute z-10 w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                        {customers.filter(c => c.mobile.includes(searchMobile)).length > 0 ? (
-                          customers.filter(c => c.mobile.includes(searchMobile)).map(c => (
+                        {customers.filter(c => String(c.mobile || "").includes(searchMobile)).length > 0 ? (
+                          customers.filter(c => String(c.mobile || "").includes(searchMobile)).map(c => (
                             <div key={c._id} onClick={() => { setCustomerId(c._id); setSearchMobile(""); }} className="px-3 py-2.5 hover:bg-slate-800 cursor-pointer text-xs text-white border-b border-slate-800/50 flex justify-between items-center">
                               <span>{c.name}</span>
                             </div>
@@ -286,7 +299,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Sales Amount ($)</label>
+                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Sales Amount (₹)</label>
                 <input
                   type="number"
                   required
@@ -300,7 +313,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
               </div>
 
               <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Amount Discount ($)</label>
+                <label className="block text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">Amount Discount (₹)</label>
                 <input
                   type="number"
                   min="0"
@@ -438,15 +451,15 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
               <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
                 <div className="flex justify-between items-center text-xs text-slate-400">
                   <span>Gross Cost:</span>
-                  <span>${Number(amount || 0).toFixed(2)}</span>
+                  <span>{formatCurrency(amount)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-slate-500 border-b border-slate-900 pb-1.5">
                   <span>Discount Adjusted:</span>
-                  <span>-${Number(discount || 0).toFixed(2)}</span>
+                  <span>-{formatCurrency(discount)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm pt-2">
                   <span className="font-bold text-white uppercase text-[10px] tracking-wider">Final Billing Cost:</span>
-                  <span className="font-extrabold text-amber-500 text-base">${finalPrice.toFixed(2)}</span>
+                  <span className="font-extrabold text-amber-500 text-base">{formatCurrency(finalPrice)}</span>
                 </div>
               </div>
             </div>
@@ -481,7 +494,7 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
           </div>
         ) : (
           <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-            {[...sales].sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((sale: any) => (
+            {[...sales].sort((a,b)=> getTime(b.createdAt) - getTime(a.createdAt)).map((sale: any) => (
               <div key={sale._id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between gap-3 relative">
                 <div>
                   <span className="text-[9px] bg-slate-950 border border-slate-850 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
@@ -506,11 +519,11 @@ export default function SalesView({ user, showToast }: SalesViewProps) {
 
                 <div className="text-right flex flex-col items-end gap-1">
                   <span className="text-xs text-slate-400 line-through text-[11px]">
-                    {sale.discount > 0 ? `$${sale.amount}` : ""}
+                    {sale.discount > 0 ? formatCurrency(sale.amount) : ""}
                   </span>
-                  <span className="text-sm font-bold text-amber-500">${sale.finalAmount}</span>
+                  <span className="text-sm font-bold text-amber-500">{formatCurrency(sale.finalAmount)}</span>
                   <span className="text-[9px] text-slate-550 font-mono">
-                    {new Date(sale.createdAt).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                    {formatDate(sale.createdAt, {month: 'short', day: 'numeric'})}
                   </span>
                   
                   {isAdmin && (

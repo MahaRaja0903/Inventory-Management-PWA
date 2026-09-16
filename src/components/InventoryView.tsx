@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, InventoryItem } from "../types";
+import { AuthUser, InventoryItem, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
 import { PackageOpen, Search, Filter, Plus, Edit2, Trash2, X, AlertCircle, Save } from "lucide-react";
 
 interface InventoryViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function InventoryView({ user }: InventoryViewProps) {
+export default function InventoryView({ user, showToast }: InventoryViewProps) {
   const isAdmin = user.role === "Admin";
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,12 +25,10 @@ export default function InventoryView({ user }: InventoryViewProps) {
 
   // Form Fields
   const [itemName, setItemName] = useState("");
-  const [category, setCategory] = useState("Inks");
+  const [category, setCategory] = useState("");
   const [quantity, setQuantity] = useState("10");
   const [purchasePrice, setPurchasePrice] = useState("0");
-  const [sellingPrice, setSellingPrice] = useState("0");
-  const [supplier, setSupplier] = useState("");
-  const [notes, setNotes] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
 
   const fetchInventory = async () => {
     try {
@@ -42,19 +42,28 @@ export default function InventoryView({ user }: InventoryViewProps) {
     }
   };
 
+  // Categories are Link records on the backend, so the form offers exactly the
+  // values Frappe will accept rather than a hardcoded list that fails validation.
+  const fetchCategories = async () => {
+    try {
+      setCategories(await apiFetch<string[]>("/inventory/categories"));
+    } catch {
+      setCategories([]);
+    }
+  };
+
   useEffect(() => {
     fetchInventory();
+    fetchCategories();
   }, []);
 
   const openAddModal = () => {
     setEditingItem(null);
     setItemName("");
-    setCategory("Inks");
+    setCategory(categories[0] || "");
     setQuantity("10");
     setPurchasePrice("0");
-    setSellingPrice("0");
-    setSupplier("");
-    setNotes("");
+
     setIsModalOpen(true);
   };
 
@@ -64,9 +73,7 @@ export default function InventoryView({ user }: InventoryViewProps) {
     setCategory(item.category);
     setQuantity(String(item.quantity));
     setPurchasePrice(String(item.purchasePrice));
-    setSellingPrice(String(item.sellingPrice));
-    setSupplier(item.supplier);
-    setNotes(item.notes || "");
+
     setIsModalOpen(true);
   };
 
@@ -79,7 +86,7 @@ export default function InventoryView({ user }: InventoryViewProps) {
       await apiFetch(`/inventory/${itemId}`, { method: "DELETE" });
       await fetchInventory();
     } catch (err: any) {
-      alert(err.message || "Failed to delete item");
+      showToast(err.message || "Failed to delete item", "error");
     }
   };
 
@@ -87,7 +94,7 @@ export default function InventoryView({ user }: InventoryViewProps) {
     e.preventDefault();
 
     if (!itemName || !category) {
-      alert("Please provide the Item Name and its category");
+      showToast("Please provide the item name and its category", "warning");
       return;
     }
 
@@ -96,9 +103,6 @@ export default function InventoryView({ user }: InventoryViewProps) {
       category,
       quantity: Number(quantity),
       purchasePrice: Number(purchasePrice),
-      sellingPrice: Number(sellingPrice),
-      supplier: supplier || "Direct supplies",
-      notes
     };
 
     try {
@@ -116,18 +120,18 @@ export default function InventoryView({ user }: InventoryViewProps) {
         });
       }
       setIsModalOpen(false);
+      showToast(editingItem ? "Item updated." : "Item added to the catalog.");
       await fetchInventory();
     } catch (err: any) {
-      alert(err.message || "Operation failed");
+      showToast(err.message || "Could not save the item", "error");
     }
   };
 
   // Compute filtering lists
   const filteredItems = items.filter(item => {
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = (item.itemName?.toLowerCase() || "").includes(searchLower) || 
-                          (item.notes?.toLowerCase() || "").includes(searchLower) ||
-                          (item.supplier?.toLowerCase() || "").includes(searchLower);
+    const matchesSearch = (item.itemName?.toLowerCase() || "").includes(searchLower) ||
+                          (item.category?.toLowerCase() || "").includes(searchLower);
     const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -160,7 +164,7 @@ export default function InventoryView({ user }: InventoryViewProps) {
           <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search catalog by name, notes or supplier..."
+            placeholder="Search catalog by item name or category..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
@@ -223,9 +227,6 @@ export default function InventoryView({ user }: InventoryViewProps) {
 
                   <h3 className="text-sm font-bold text-white mb-1 group-hover:text-amber-500">{item.itemName}</h3>
                   
-                  {item.notes && (
-                    <p className="text-slate-400 text-xs line-clamp-2 mb-3 font-sans leading-relaxed">{item.notes}</p>
-                  )}
 
                   <div className="grid grid-cols-2 gap-2 text-xs py-2 bg-slate-950/40 rounded-lg px-2 border border-slate-950 mb-3">
                     <div>
@@ -233,8 +234,8 @@ export default function InventoryView({ user }: InventoryViewProps) {
                       <span className="font-bold text-white">{item.quantity} units</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 text-[10px] block font-sans">Supplier</span>
-                      <span className="font-semibold text-slate-300 truncate block">{item.supplier}</span>
+                      <span className="text-slate-500 text-[10px] block font-sans">Category</span>
+                      <span className="font-semibold text-slate-300 truncate block">{item.category}</span>
                     </div>
                   </div>
                 </div>
@@ -242,15 +243,9 @@ export default function InventoryView({ user }: InventoryViewProps) {
                 <div className="flex items-center justify-between border-t border-slate-950 pt-3 mt-1">
                   <div className="text-[11px]">
                     <span className="text-slate-500 font-sans block text-[9px] uppercase tracking-wide">Purchase Price</span>
-                    <span className="text-slate-300 font-bold">${item.purchasePrice.toFixed(2)}</span>
+                    <span className="text-slate-300 font-bold">{formatCurrency(item.purchasePrice)}</span>
                   </div>
                   
-                  {item.sellingPrice > 0 && (
-                    <div className="text-[11px] text-right">
-                      <span className="text-slate-500 font-sans block text-[9px] uppercase tracking-wide">Retail Price</span>
-                      <span className="text-amber-500 font-extrabold">${item.sellingPrice.toFixed(2)}</span>
-                    </div>
-                  )}
 
                   {isAdmin && (
                     <div className="flex gap-2">
@@ -305,19 +300,16 @@ export default function InventoryView({ user }: InventoryViewProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Category</label>
+                  <label htmlFor="item-category" className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Category</label>
                   <select
+                    id="item-category"
+                    required
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full px-2 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
                   >
-                    <option value="Inks">Inks</option>
-                    <option value="Needles">Needles</option>
-                    <option value="Sanitation">Sanitation</option>
-                    <option value="Piercing Supplies">Piercing Supplies</option>
-                    <option value="Aftercare Products">Aftercare Products</option>
-                    <option value="Anesthetics">Anesthetics</option>
-                    <option value="Apparel & Merch">Apparel & Merch</option>
+                    <option value="" disabled>Select a category</option>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
 
@@ -336,7 +328,7 @@ export default function InventoryView({ user }: InventoryViewProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Cost Price ($)</label>
+                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Cost Price (₹)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -348,41 +340,6 @@ export default function InventoryView({ user }: InventoryViewProps) {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Retail Price ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={sellingPrice}
-                    onChange={(e) => setSellingPrice(e.target.value)}
-                    placeholder="0 if not for retail sell"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Supplier Vendor</label>
-                <input
-                  type="text"
-                  value={supplier}
-                  onChange={(e) => setSupplier(e.target.value)}
-                  placeholder="Inkwell Distributors or direct brand"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5 font-sans">Notes / Instructions</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Needle gauge size details, shelf warning labels..."
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-                />
               </div>
 
               <div className="pt-2 border-t border-slate-800 flex justify-end gap-2.5">

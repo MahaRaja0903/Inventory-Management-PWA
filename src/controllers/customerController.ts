@@ -1,10 +1,14 @@
 import { Request, Response } from "express";
 import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
+import { toApp, toAppList, toFrappe } from "../config/fieldMap";
+import { getHistoryForCustomer, deleteHistoryForCustomer } from "../lib/customerHistory";
 
-export async function getCustomers(req: Request, res: Response): Promise<void> {
+const DOCTYPE = "ATS Customer";
+const USER_DOCTYPE = "ATS User";
+
+export async function getCustomers(_req: Request, res: Response): Promise<void> {
   try {
-    const list = await getFrappeDocs("ATS Customer", null, ["name", "name1", "mobile", "email", "address", "totalvisits", "totalspending"]);
-    res.status(200).json(list.map((doc: any) => ({ ...doc, _id: doc.name, name: doc.name1 || doc.name, totalVisits: doc.totalvisits, totalSpending: doc.totalspending })));
+    res.status(200).json(toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE)));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load customers" });
   }
@@ -13,33 +17,28 @@ export async function getCustomers(req: Request, res: Response): Promise<void> {
 export async function getCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const customer = await getFrappeDoc("ATS Customer", id);
+    const customer = toApp<any>(DOCTYPE, await getFrappeDoc(DOCTYPE, id));
     if (!customer) {
       res.status(404).json({ message: "Customer profile not found" });
       return;
     }
-    customer._id = customer.name;
-    customer.name = customer.name1 || customer.name;
 
-    const allHistory = await getFrappeDocs("ATS Customer History");
-    const history = allHistory.filter((h: any) => h.customerId === id);
-    
-    const users = await getFrappeDocs("ATS User");
-    
-    const enrichedHistory = history.map((h: any) => {
-      const artist = users.find((u: any) => u.name === h.employeeId);
-      return {
+    // History is best-effort: a missing history doctype must not take the profile down.
+    const history = await getHistoryForCustomer(id);
+
+    let enrichedHistory = history;
+    if (history.length > 0) {
+      const users = toAppList(USER_DOCTYPE, await getFrappeDocs(USER_DOCTYPE));
+      const byId = new Map(users.map((u: any) => [u._id, u]));
+      enrichedHistory = history.map((h: any) => ({
         ...h,
-        _id: h.name,
-        employeeName: artist ? (artist.name1 || artist.name) : "Unknown Artist"
-      };
-    });
+        employeeName: byId.get(h.employeeId)?.name || "Unknown Artist",
+      }));
+    }
 
-    res.status(200).json({
-      ...customer,
-      history: enrichedHistory
-    });
+    res.status(200).json({ ...customer, history: enrichedHistory });
   } catch (error: any) {
+    console.error("[customers] Failed to load customer:", error.message);
     res.status(500).json({ message: "Error locating customer record" });
   }
 }
@@ -53,28 +52,34 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
   }
 
   try {
-    const allCustomers = await getFrappeDocs("ATS Customer");
-    const existing = allCustomers.find((c: any) => c.mobile === mobile);
+    const existing = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE)).find(
+      (c: any) => c.mobile === mobile
+    );
+
     if (existing) {
-      existing._id = existing.name;
-      res.status(400).json({ message: "A customer with this mobile number is already registered", customer: existing });
+      // 409 lets the sale screen recognise a duplicate and select the existing
+      // customer, instead of treating it as a generic failure.
+      res.status(409).json({
+        message: "A customer with this mobile number is already registered",
+        customer: existing,
+      });
       return;
     }
 
-    const newCustomer = await createFrappeDoc("ATS Customer", {
-      name,
-      name1: name,
-      mobile,
-      email: email || "",
-      address: address || "",
-      totalvisits: 0,
-      totalspending: 0
-    });
-
-    if (newCustomer) {
-      newCustomer._id = newCustomer.name;
-      newCustomer.name = newCustomer.name1 || newCustomer.name;
-    }
+    const newCustomer = toApp(
+      DOCTYPE,
+      await createFrappeDoc(
+        DOCTYPE,
+        toFrappe(DOCTYPE, {
+          name,
+          mobile,
+          email: email || "",
+          address: address || "",
+          totalVisits: 0,
+          totalSpending: 0,
+        })
+      )
+    );
 
     res.status(201).json({ message: "Customer created successfully", customer: newCustomer });
   } catch (error: any) {
@@ -85,18 +90,17 @@ export async function createCustomer(req: Request, res: Response): Promise<void>
 export async function updateCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const payload = { ...req.body };
-    if (payload.name) {
-      payload.name1 = payload.name;
-    }
-
-    const updated = await updateFrappeDoc("ATS Customer", id, payload);
-    if (!updated) {
+    const existing = await getFrappeDoc(DOCTYPE, id);
+    if (!existing) {
       res.status(404).json({ message: "Customer record not found" });
       return;
     }
-    updated._id = updated.name;
-    updated.name = updated.name1 || updated.name;
+
+    // `toFrappe` forwards only mapped fields, so the request can no longer carry
+    // `name` through to Frappe and trigger a document rename that would orphan
+    // every sale pointing at this customer.
+    const updated = toApp(DOCTYPE, await updateFrappeDoc(DOCTYPE, id, toFrappe(DOCTYPE, req.body)));
+
     res.status(200).json({ message: "Customer profile updated successfully", customer: updated });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update profile" });
@@ -106,20 +110,22 @@ export async function updateCustomer(req: Request, res: Response): Promise<void>
 export async function deleteCustomer(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   try {
-    const success = await deleteFrappeDoc("ATS Customer", id);
-    if (!success) {
+    const existing = await getFrappeDoc(DOCTYPE, id);
+    if (!existing) {
       res.status(404).json({ message: "Customer record not found" });
       return;
     }
 
-    const allHistory = await getFrappeDocs("ATS Customer History");
-    const historyToDelete = allHistory.filter((h: any) => h.customerId === id);
-    for (const h of historyToDelete) {
-      await deleteFrappeDoc("ATS Customer History", h.name);
-    }
+    // Clear history first: deleting the customer and then failing on history left the
+    // record gone but the response reporting failure.
+    await deleteHistoryForCustomer(id);
+    await deleteFrappeDoc(DOCTYPE, id);
 
-    res.status(200).json({ message: "Customer and their design history records deleted successfully" });
+    res.status(200).json({
+      message: "Customer and their design history records deleted successfully",
+    });
   } catch (error: any) {
+    console.error("[customers] Failed to delete customer:", error.message);
     res.status(500).json({ message: "Failed to delete customer record" });
   }
 }

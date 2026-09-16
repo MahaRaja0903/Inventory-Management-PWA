@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, SystemSettings } from "../types";
+import { AuthUser, SystemSettings, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
 import { Settings, Save, ShieldAlert, CheckCircle } from "lucide-react";
 
 interface SettingsViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function SettingsView({ user }: SettingsViewProps) {
+export default function SettingsView({ user, showToast }: SettingsViewProps) {
   const isAdmin = user.role === "Admin";
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,22 +25,28 @@ export default function SettingsView({ user }: SettingsViewProps) {
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
   const [geofenceLatitude, setGeofenceLatitude] = useState<number | string>("");
   const [geofenceLongitude, setGeofenceLongitude] = useState<number | string>("");
+  const [geofenceRadius, setGeofenceRadius] = useState<number | string>(100);
+  const [minimumShiftHours, setMinimumShiftHours] = useState<number | string>(8);
  
   const fetchSettings = async () => {
     try {
       setLoading(true);
       const data = await apiFetch<SystemSettings>("/settings");
       setSettings(data);
-      setStudioName(data.profileSettings.studioName);
-      setStudioEmail(data.profileSettings.studioEmail);
-      setStudioPhone(data.profileSettings.studioPhone);
-      setStudioAddress(data.profileSettings.studioAddress);
-      setNotificationEnabled(data.notificationEnabled);
-      setGeofenceEnabled(data.geofenceEnabled || false);
-      setGeofenceLatitude(data.geofenceLatitude !== undefined ? data.geofenceLatitude : "");
-      setGeofenceLongitude(data.geofenceLongitude !== undefined ? data.geofenceLongitude : "");
-    } catch {
-      console.error("Failed to load setup files.");
+      // Read defensively: one missing section must not blank the entire form.
+      const profile = data.profileSettings || ({} as SystemSettings["profileSettings"]);
+      setStudioName(profile.studioName || "");
+      setStudioEmail(profile.studioEmail || "");
+      setStudioPhone(profile.studioPhone || "");
+      setStudioAddress(profile.studioAddress || "");
+      setNotificationEnabled(Boolean(data.notificationEnabled));
+      setGeofenceEnabled(Boolean(data.geofenceEnabled));
+      setGeofenceLatitude(data.geofenceLatitude ?? "");
+      setGeofenceLongitude(data.geofenceLongitude ?? "");
+      setGeofenceRadius(data.geofenceRadius ?? 100);
+      setMinimumShiftHours(data.minimumShiftHours ?? 8);
+    } catch (err: any) {
+      showToast(err.message || "Failed to load studio settings.", "error");
     } finally {
       setLoading(false);
     }
@@ -51,7 +58,7 @@ export default function SettingsView({ user }: SettingsViewProps) {
 
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      showToast("Geolocation is not supported by your browser.", "error");
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -60,7 +67,7 @@ export default function SettingsView({ user }: SettingsViewProps) {
         setGeofenceLongitude(position.coords.longitude);
       },
       (err) => {
-        alert("Failed to detect location: " + err.message);
+        showToast("Failed to detect location: " + err.message, "error");
       },
       { enableHighAccuracy: true }
     );
@@ -80,7 +87,9 @@ export default function SettingsView({ user }: SettingsViewProps) {
       },
       geofenceEnabled,
       geofenceLatitude: geofenceLatitude !== "" ? Number(geofenceLatitude) : 0,
-      geofenceLongitude: geofenceLongitude !== "" ? Number(geofenceLongitude) : 0
+      geofenceLongitude: geofenceLongitude !== "" ? Number(geofenceLongitude) : 0,
+      geofenceRadius: Number(geofenceRadius) || 100,
+      minimumShiftHours: Number(minimumShiftHours) || 0
     };
  
     try {
@@ -89,12 +98,11 @@ export default function SettingsView({ user }: SettingsViewProps) {
         method: "PUT",
         body: JSON.stringify(payload)
       });
-      setSuccess("Studio settings adjusted successfully!");
-      // Clear alert after some time
+      setSuccess("Studio settings saved.");
       setTimeout(() => setSuccess(""), 4000);
       await fetchSettings();
     } catch (err: any) {
-      alert("Failed to modify settings.");
+      showToast(err.message || "Failed to save settings.", "error");
     }
   };
 
@@ -191,12 +199,30 @@ export default function SettingsView({ user }: SettingsViewProps) {
             />
           </div>
 
+          <div className="py-2.5 flex items-center justify-between border-t border-slate-850 gap-4">
+            <div>
+              <label htmlFor="minimum-shift-hours" className="block text-xs font-semibold text-white">Minimum shift before check-out</label>
+              <span className="text-[10px] text-slate-500 font-sans block">Hours an employee must log before they can close a shift. Set to 0 to allow check-out at any time.</span>
+            </div>
+            <input
+              id="minimum-shift-hours"
+              type="number"
+              min="0"
+              max="24"
+              step="0.5"
+              disabled={!isAdmin}
+              value={minimumShiftHours}
+              onChange={(e) => setMinimumShiftHours(e.target.value)}
+              className="w-20 shrink-0 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white text-center focus:outline-none focus:border-amber-500 disabled:opacity-50"
+            />
+          </div>
+
           {/* Geofencing Coordinates Setup */}
           <div className="border-t border-slate-850 pt-5 mt-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className="block text-xs font-semibold text-white">Enable Employee Geofencing</span>
-                <span className="text-[10px] text-slate-500 font-sans block">Restrict Employee logins to when they are within 5 meters of the studio location.</span>
+                <span className="text-[10px] text-slate-500 font-sans block">Only allow check-in when an employee is inside the radius set below.</span>
               </div>
               <input
                 type="checkbox"
@@ -250,6 +276,25 @@ export default function SettingsView({ user }: SettingsViewProps) {
                       className="w-full px-3 py-2 bg-slate-900 border border-slate-750 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label htmlFor="geofence-radius" className="block text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1.5 font-sans">
+                    Allowed radius (metres)
+                  </label>
+                  <input
+                    id="geofence-radius"
+                    type="number"
+                    min="10"
+                    step="10"
+                    disabled={!isAdmin}
+                    value={geofenceRadius}
+                    onChange={(e) => setGeofenceRadius(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-750 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1.5 font-sans">
+                    Phone GPS is typically accurate to 10&ndash;50 m. Anything under 50 m will reject staff who are genuinely in the studio.
+                  </p>
                 </div>
               </div>
             )}

@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
-import { AuthUser, Attendance } from "../types";
+import { AuthUser, Attendance, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatTime } from "../lib/datetime";
 import { CalendarClock, MapPin, Search, LogIn, LogOut, CheckCircle, Clock } from "lucide-react";
 
 interface AttendanceViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function AttendanceView({ user }: AttendanceViewProps) {
+export default function AttendanceView({ user, showToast }: AttendanceViewProps) {
   const isAdmin = user.role === "Admin";
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,7 @@ export default function AttendanceView({ user }: AttendanceViewProps) {
       });
       await fetchLogs();
     } catch (err: any) {
-      alert(err.message || "Attendance submission failed.");
+      showToast(err.message || "Attendance submission failed.", "error");
     } finally {
       setIsPunching(false);
     }
@@ -90,7 +92,7 @@ export default function AttendanceView({ user }: AttendanceViewProps) {
               {myTodayStatus ? (
                 <div className="flex items-center gap-1.5 text-xs font-bold text-white leading-none">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>{myTodayStatus.status} At {new Date(myTodayStatus.checkInTime).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit'})}</span>
+                  <span>{myTodayStatus.status} At {formatTime(myTodayStatus.checkInTime)}</span>
                 </div>
               ) : (
                 <span className="text-xs font-bold text-red-400 leading-none">Not Checked In</span>
@@ -188,13 +190,10 @@ export default function AttendanceView({ user }: AttendanceViewProps) {
                       </td>
                       <td className="p-4 text-slate-350">{log.date}</td>
                       <td className="p-4 font-mono text-slate-400">
-                        {new Date(log.checkInTime).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                        {formatTime(log.checkInTime, {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
                       </td>
                       <td className="p-4 font-mono text-slate-400">
-                        {outTime 
-                          ? new Date(outTime).toLocaleTimeString(undefined, {hour: '2-digit', minute:'2-digit', second:'2-digit'})
-                          : "—"
-                        }
+                        {formatTime(outTime, {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
                       </td>
                       <td className="p-4 font-sans text-slate-400 italic flex items-center gap-1.5 mt-2.5">
                         <MapPin className="w-3.5 h-3.5 text-slate-500" />

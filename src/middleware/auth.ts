@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "aquarius_tattoo_studio_secret_key_13579";
+import { JWT_SECRET } from "../config/secrets";
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -29,11 +28,19 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
       name: decoded.name,
       email: decoded.email,
       role: decoded.role,
-      profileImage: decoded.profileImage
+      profileImage: decoded.profileImage,
     };
     next();
-  } catch (err) {
-    res.status(403).json({ message: "Token is expired or invalid" });
+  } catch (err: any) {
+    // An expired or malformed token is a failure to authenticate, so it answers 401.
+    // It used to answer 403, which the client treats as a permission error rather than
+    // a dead session — so an expired login showed errors on every screen instead of
+    // returning the user to the sign-in page.
+    const expired = err?.name === "TokenExpiredError";
+    res.status(401).json({
+      message: expired ? "Session expired. Please sign in again." : "Token is invalid",
+      code: expired ? "TOKEN_EXPIRED" : "TOKEN_INVALID",
+    });
     return;
   }
 }

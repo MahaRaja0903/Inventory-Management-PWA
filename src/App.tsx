@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { clearAuthentication, getRememberedUser, apiFetch } from "./lib/api";
+import { formatDateTime } from "./lib/datetime";
 import { AuthUser, NotificationItem, ToastState, ToastType } from "./types";
 import { Bell, X, RefreshCw, CheckCircle2, ShieldAlert, CheckCircle, Info, AlertTriangle, AlertOctagon } from "lucide-react";
 
@@ -73,9 +74,9 @@ export default function App() {
   const handleMarkAllRead = async () => {
     try {
       const unreadList = notifications.filter(n => !n.isRead);
-      for (const item of unreadList) {
-        await apiFetch(`/notifications/${item._id}/read`, { method: "PUT" });
-      }
+      await Promise.allSettled(
+        unreadList.map(item => apiFetch(`/notifications/${item._id}/read`, { method: "PUT" }))
+      );
       await fetchNotifications();
     } catch {
       console.warn("Could not mark notifications as read.");
@@ -88,7 +89,8 @@ export default function App() {
     // Listen for auth expiration events from fetch helper
     const handleExpired = () => {
       setUser(null);
-      alert("Your session has expired. Please sign in again.");
+      setActiveTab("dashboard");
+      showToast("Your session has expired. Please sign in again.", "warning");
     };
 
     window.addEventListener("auth-expired", handleExpired);
@@ -126,6 +128,7 @@ export default function App() {
             user={user} 
             setActiveTab={setActiveTab} 
             triggerNotificationRefresh={fetchNotifications} 
+            showToast={showToast}
           />
         );
       case "tasks":
@@ -262,12 +265,7 @@ export default function App() {
                           <strong className={`${theme === "dark" ? "text-white" : "text-slate-900"} block font-bold`}>{item.title}</strong>
                           <p className={`${theme === "dark" ? "text-slate-400" : "text-slate-600"} font-sans leading-normal`}>{item.description}</p>
                           <span className={`text-[9px] ${theme === "dark" ? "text-slate-500" : "text-slate-400"} block font-mono`}>
-                            {new Date(item.createdAt).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}
+                            {formatDateTime(item.createdAt)}
                           </span>
                         </div>
 

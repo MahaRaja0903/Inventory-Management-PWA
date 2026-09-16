@@ -11,7 +11,7 @@ import * as notificationController from "../controllers/notificationController";
 import * as settingsController from "../controllers/settingsController";
 import * as taskController from "../controllers/taskController";
 
-import { authenticateToken, requireAdmin, requireEmployeeOrAdmin } from "../middleware/auth";
+import { authenticateToken, requireAdmin } from "../middleware/auth";
 
 const router = Router();
 
@@ -31,6 +31,7 @@ router.delete("/tasks/:id", authenticateToken, requireAdmin, taskController.dele
 
 // --- Inventory CRUD (Protections: Viewable by all authenticated, modifications by Admin) ---
 router.get("/inventory", authenticateToken, inventoryController.getInventory);
+router.get("/inventory/categories", authenticateToken, inventoryController.getCategories);
 router.get("/inventory/:id", authenticateToken, inventoryController.getInventoryItem);
 router.post("/inventory", authenticateToken, requireAdmin, inventoryController.createInventoryItem);
 router.put("/inventory/:id", authenticateToken, requireAdmin, inventoryController.updateInventoryItem);
@@ -45,7 +46,7 @@ router.delete("/expenses/:id", authenticateToken, expenseController.deleteExpens
 
 // --- Employees Admin panel CRUD ---
 router.get("/employees", authenticateToken, employeeController.getEmployees);
-router.get("/employees/:id", authenticateToken, employeeController.getEmployee);
+router.get("/employees/:id", authenticateToken, requireAdmin, employeeController.getEmployee);
 router.post("/employees", authenticateToken, requireAdmin, employeeController.createEmployee);
 router.put("/employees/:id", authenticateToken, requireAdmin, employeeController.updateEmployee);
 router.delete("/employees/:id", authenticateToken, requireAdmin, employeeController.deleteEmployee);

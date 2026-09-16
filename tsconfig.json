@@ -15,11 +15,17 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
 
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": [
-      "vite-plugin-pwa/client"
+      "vite-plugin-pwa/client",
+      "node"
     ]
-  }
+  },
+  "include": ["src", "server.ts", "api", "vite.config.js"],
+  "exclude": ["node_modules", "dist"]
 }

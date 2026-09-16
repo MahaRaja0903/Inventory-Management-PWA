@@ -8,12 +8,12 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "verify:schema": "tsx scripts/verify-schema.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
-    "@types/mongoose": "^5.11.96",
     "@vitejs/plugin-react": "^5.0.4",
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
@@ -21,7 +21,6 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.546.0",
-    "mongoose": "^9.7.0",
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1"

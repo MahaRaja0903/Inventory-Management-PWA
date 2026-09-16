@@ -24,14 +24,12 @@ export interface User {
 export interface InventoryItem {
   _id: string;
   itemName: string;
+  /** Must match a "Tattoo Item Group" record — it is a Link field, not free text. */
   category: string;
   quantity: number;
   purchasePrice: number;
-  sellingPrice: number;
-  supplier: string;
-  notes?: string;
+  /** Derived from quantity on every write; never set it directly. */
   stockStatus: StockStatus;
-  createdBy: string; // User ID
   createdAt: string;
   updatedAt: string;
 }
@@ -98,7 +96,7 @@ export interface Sale {
   discount: number;
   finalAmount: number;
   paymentMethod: "Cash" | "Card" | "Bank Transfer" | "UPI";
-  itemsUsed: SaleItem[];
+  itemsUsed?: SaleItem[];
   createdAt: string;
 }
 
@@ -143,6 +141,10 @@ export interface SystemSettings {
   geofenceEnabled?: boolean;
   geofenceLatitude?: number;
   geofenceLongitude?: number;
+  /** Metres. Defaults to 100 — tighter than GPS accuracy will reject staff who are on site. */
+  geofenceRadius?: number;
+  /** Hours an employee must log before check-out is allowed. 0 disables the check. */
+  minimumShiftHours?: number;
 }
 
 // UI Feedback types

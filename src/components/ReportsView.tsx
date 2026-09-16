@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AuthUser } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
 import { BarChart3, TrendingUp, DollarSign, PackageOpen, Award, ListChecks, CalendarRange, Sparkles, Loader } from "lucide-react";
 
 interface ReportsViewProps {
@@ -72,7 +73,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Total Sales Revenue</span>
-              <p className="text-xl font-black text-white mt-1">${netProfit.sales?.toFixed(2)}</p>
+              <p className="text-xl font-black text-white mt-1">{formatCurrency(netProfit.sales)}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-emerald-400" />
@@ -82,7 +83,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
             <div>
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Approved Expenses</span>
-              <p className="text-xl font-black text-white mt-1">${netProfit.approvedExpenses?.toFixed(2)}</p>
+              <p className="text-xl font-black text-white mt-1">{formatCurrency(netProfit.approvedExpenses)}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
               <DollarSign className="w-5 h-5 text-red-400" />
@@ -93,7 +94,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
             <div>
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Net Studio Margin</span>
               <p className={`text-xl font-black mt-1 ${netProfit.netProfit >= 0 ? "text-cyan-400" : "text-red-400"}`}>
-                ${netProfit.netProfit?.toFixed(2)}
+                {formatCurrency(netProfit.netProfit)}
               </p>
             </div>
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${netProfit.netProfit >= 0 ? "bg-cyan-500/10" : "bg-red-500/10"}`}>
@@ -153,7 +154,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
                       <div key={m.month} className="space-y-1">
                         <div className="flex justify-between items-center text-xs">
                           <span className="text-slate-300 font-bold">{m.name}</span>
-                          <span className="text-amber-500 font-mono font-bold">${m.revenue.toFixed(2)}</span>
+                          <span className="text-amber-500 font-mono font-bold">{formatCurrency(m.revenue)}</span>
                         </div>
                         <div className="w-full bg-slate-950 rounded-full h-4 overflow-hidden border border-slate-850">
                           <div 
@@ -195,7 +196,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
                       <div key={item.name} className="space-y-1">
                         <div className="flex justify-between text-xs font-sans">
                           <span className="text-slate-300 font-semibold">{item.name}</span>
-                          <span className="text-slate-400 font-bold">${item.value.toFixed(2)} <strong className="text-amber-505 font-medium ml-1">({pct}%)</strong></span>
+                          <span className="text-slate-400 font-bold">{formatCurrency(item.value)} <strong className="text-amber-505 font-medium ml-1">({pct}%)</strong></span>
                         </div>
                         <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-850">
                           <div style={{ width: `${pct}%` }} className="bg-red-500/80 h-full rounded-full" />
@@ -210,15 +211,15 @@ export default function ReportsView({ user }: ReportsViewProps) {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
                       <span className="text-slate-505 font-sans">Pending Approvals Amount</span>
-                      <span className="text-amber-50 font-semibold">${expensesReport?.pendingExpense?.toFixed(2)}</span>
+                      <span className="text-amber-50 font-semibold">{formatCurrency(expensesReport?.pendingExpense)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-505 font-sans">Cleared operating bills</span>
-                      <span className="text-emerald-400 font-bold">${expensesReport?.approvedExpense?.toFixed(2)}</span>
+                      <span className="text-emerald-400 font-bold">{formatCurrency(expensesReport?.approvedExpense)}</span>
                     </div>
                     <div className="border-t border-slate-900 pt-2 flex justify-between font-bold">
                       <span className="text-slate-300 font-sans uppercase text-[10px]">Total cost logged</span>
-                      <span className="text-white">${expensesReport?.totalExpense?.toFixed(2)}</span>
+                      <span className="text-white">{formatCurrency(expensesReport?.totalExpense)}</span>
                     </div>
                   </div>
                 </div>
@@ -287,7 +288,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
                   <div className="bg-slate-950 p-4 border border-slate-850 rounded-xl">
                     <span className="text-slate-500 text-[9px] uppercase font-bold tracking-wider block">Supplies stock value</span>
-                    <p className="text-xl font-extrabold text-amber-500 mt-1">${inventoryReport.totalAssetValue?.toFixed(2)}</p>
+                    <p className="text-xl font-extrabold text-amber-500 mt-1">{formatCurrency(inventoryReport.totalAssetValue)}</p>
                   </div>
                   <div className="bg-slate-950 p-4 border border-slate-850 rounded-xl">
                     <span className="text-slate-500 text-[9px] uppercase font-bold tracking-wider block">Physical stock count</span>
@@ -312,7 +313,7 @@ export default function ReportsView({ user }: ReportsViewProps) {
                         <div key={item._id} className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex justify-between items-center text-xs">
                           <div>
                             <span className="font-bold text-white block">{item.itemName}</span>
-                            <span className="text-[10px] text-slate-500 mt-0.5 block">Supplier: {item.supplier}</span>
+                            <span className="text-[10px] text-slate-500 mt-0.5 block">{item.category}</span>
                           </div>
                           <span className="font-extrabold text-red-400 bg-red-400/5 px-2 py-1 border border-red-500/10 rounded">
                             {item.quantity} Left

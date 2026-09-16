@@ -1,15 +1,30 @@
 import { useState, useEffect } from "react";
-import { AuthUser, Sale, Expense, InventoryItem, Attendance, Task } from "../types";
+import { AuthUser, Sale, Expense, InventoryItem, Attendance, Task, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
+import { formatDate, formatTime, getTime } from "../lib/datetime";
 import { TrendingUp, Coins, ClipboardList, AlertTriangle, UserCheck, CalendarDays, ShoppingBag, Plus, Sparkles, LogIn, LogOut, Loader, CheckCircle2, ClipboardCheck } from "lucide-react";
 
 interface DashboardViewProps {
   user: AuthUser;
   setActiveTab: (tab: any) => void;
   triggerNotificationRefresh: () => void;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function DashboardView({ user, setActiveTab, triggerNotificationRefresh }: DashboardViewProps) {
+
+/** The server's geofence rejections all describe either a distance or a missing fix. */
+function isLocationError(message?: string): boolean {
+  if (!message) return false;
+  return /location required|check-in is allowed|read your location|geofencing/i.test(message);
+}
+
+function isOutOfRange(message?: string): boolean {
+  if (!message) return false;
+  return /check-in is allowed within/i.test(message);
+}
+
+export default function DashboardView({ user, setActiveTab, triggerNotificationRefresh, showToast }: DashboardViewProps) {
   const isAdmin = user.role === "Admin";
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -65,7 +80,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
     setIsCheckingIn(true);
     
     if (!navigator.geolocation) {
-      setLocationDialogMessage("Your browser does not support geolocation. Please use a modern browser to check in. You must be within 2 meters from the Store Radius.");
+      setLocationDialogMessage("Your browser does not support geolocation. Please use a modern browser to check in. You must be inside the studio's check-in area.");
       setShowLocationDialog(true);
       setIsCheckingIn(false);
       return;
@@ -85,15 +100,13 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
           await fetchData();
           triggerNotificationRefresh();
         } catch (err: any) {
-          if (err.message && (err.message.includes("Location required") || err.message.includes("Store Radius") || err.message.includes("geofencing"))) {
-            let finalMessage = err.message;
-            if (!finalMessage.includes("Store Radius")) {
-              finalMessage += " You must be within 2 meters from the Store Radius.";
-            }
-            setLocationDialogMessage(finalMessage);
+          // The server explains the distance and the allowed radius, so show its
+          // message as-is rather than appending a second, possibly stale, figure.
+          if (isLocationError(err.message)) {
+            setLocationDialogMessage(err.message);
             setShowLocationDialog(true);
           } else {
-            alert(err.message || "Attendance check-in failed");
+            showToast(err.message || "Attendance check-in failed", "error");
           }
         } finally {
           setIsCheckingIn(false);
@@ -109,7 +122,6 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
         } else if (err.code === err.TIMEOUT) {
           msg = "Location request timed out. Please check your signal and try again.";
         }
-        msg += " You must be within 2 meters from the Store Radius.";
         setLocationDialogMessage(msg);
         setShowLocationDialog(true);
       },
@@ -126,7 +138,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
       await fetchData();
       triggerNotificationRefresh();
     } catch (err: any) {
-      alert(err.message || "Attendance check-out failed");
+      showToast(err.message || "Attendance check-out failed", "error");
     } finally {
       setIsCheckingIn(false);
     }
@@ -264,7 +276,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
                 </div>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-white">₹{todayRevenue.toFixed(2)}</p>
+              <p className="text-lg sm:text-2xl font-bold text-white">{formatCurrency(todayRevenue)}</p>
               <span className="text-[10px] text-slate-500 mt-1 block">{todaySales.length} services today</span>
             </div>
 
@@ -275,7 +287,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                   <Coins className="w-3.5 h-3.5 text-amber-500" />
                 </div>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-white">₹{monthlyRevenue.toFixed(2)}</p>
+              <p className="text-lg sm:text-2xl font-bold text-white">{formatCurrency(monthlyRevenue)}</p>
               <span className="text-[10px] text-slate-500 mt-1 block">{monthlySales.length} items registered</span>
             </div>
 
@@ -286,7 +298,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                   <ClipboardList className="w-3.5 h-3.5 text-red-400" />
                 </div>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-white">₹{totalApprovedExpensesAmount.toFixed(2)}</p>
+              <p className="text-lg sm:text-2xl font-bold text-white">{formatCurrency(totalApprovedExpensesAmount)}</p>
               <span className="text-[10px] text-slate-500 mt-1 block">Approved operating bills</span>
             </div>
 
@@ -298,7 +310,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                 </div>
               </div>
               <p className={`text-lg sm:text-2xl font-bold ${netEarnings >= 0 ? "text-cyan-400" : "text-red-400"}`}>
-                ₹{netEarnings.toFixed(2)}
+                {formatCurrency(netEarnings)}
               </p>
               <span className="text-[10px] text-slate-500 mt-1 block">Net margin index</span>
             </div>
@@ -371,14 +383,14 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
               ) : (
                 <div id="revenue-chart" className="space-y-4">
                   {/* List recent 5 sales as horizontal aesthetic bars */}
-                  {[...sales].sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4).map((item, idx) => {
+                  {[...sales].sort((a,b)=> getTime(b.createdAt) - getTime(a.createdAt)).slice(0, 4).map((item, idx) => {
                     const pct = Math.min(100, Math.max(15, (item.finalAmount / 500) * 100));
                     return (
                       <div key={item._id} className="space-y-1">
                         <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-slate-300 font-medium">{item.serviceType} (₹{item.finalAmount})</span>
+                          <span className="text-slate-300 font-medium">{item.serviceType} ({formatCurrency(item.finalAmount)})</span>
                           <span className="text-slate-500 text-[10px]">
-                            {new Date(item.createdAt).toLocaleDateString(undefined, {month: "short", day: "numeric"})}
+                            {formatDate(item.createdAt, {month: "short", day: "numeric"})}
                           </span>
                         </div>
                         <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800/55">
@@ -420,7 +432,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                       </div>
                       <div className="text-right text-[11px]">
                         <span className="text-emerald-400 font-bold block">{shift.status}</span>
-                        <span className="text-slate-500 text-[9px]">Check-In: {new Date(shift.checkInTime).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-slate-500 text-[9px]">Check-In: {formatTime(shift.checkInTime)}</span>
                       </div>
                     </div>
                   ))
@@ -436,7 +448,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
               <span className="text-xs text-slate-400 font-medium block mb-2">My Sales Revenue (This month)</span>
-              <p className="text-2xl font-extrabold text-amber-500">₹{myMonthlySalesRevenue.toFixed(2)}</p>
+              <p className="text-2xl font-extrabold text-amber-500">{formatCurrency(myMonthlySalesRevenue)}</p>
               <span className="text-[10px] text-slate-500 mt-1 block">{myMonthlySales.length} items sold</span>
             </div>
 
@@ -463,7 +475,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
               </div>
               <span className="text-[10px] text-slate-500 mt-2 block">
                 {todayAttendance?.checkInTime 
-                  ? `Logged in today at ${new Date(todayAttendance.checkInTime).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'})}`
+                  ? `Logged in today at ${formatTime(todayAttendance.checkInTime)}`
                   : "Submit check-in at shift beginning"
                 }
               </span>
@@ -508,9 +520,9 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                         <span className="text-[10px] text-slate-500">Method: {sale.paymentMethod}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-amber-500 block">₹{sale.finalAmount}</span>
+                        <span className="text-xs font-bold text-amber-500 block">{formatCurrency(sale.finalAmount)}</span>
                         <span className="text-[9px] text-slate-400">
-                          {new Date(sale.createdAt).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})}
+                          {formatDate(sale.createdAt, {month: 'short', day: 'numeric'})}
                         </span>
                       </div>
                     </div>
@@ -559,7 +571,7 @@ export default function DashboardView({ user, setActiveTab, triggerNotificationR
                 <AlertTriangle className="w-8 h-8 text-red-500" />
               </div>
               <h3 className="text-xl font-bold text-white tracking-tight mb-2">
-                {locationDialogMessage.includes("Store Radius") ? "Out of Store Radius" : "Location Required"}
+                {isOutOfRange(locationDialogMessage) ? "Outside the Check-In Area" : "Location Required"}
               </h3>
               <p className="text-sm text-slate-300 mb-6 font-medium leading-relaxed">
                 {locationDialogMessage}

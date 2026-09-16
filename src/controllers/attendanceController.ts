@@ -1,33 +1,52 @@
 import { Request, Response } from "express";
-import { getFrappeDocs, getFrappeDoc, createFrappeDoc, updateFrappeDoc, deleteFrappeDoc } from "../config/frappeClient";
+import { getFrappeDocs, createFrappeDoc, updateFrappeDoc } from "../config/frappeClient";
+import { toApp, toAppList, toFrappe } from "../config/fieldMap";
+import { loadSettings } from "./settingsController";
 
-function getDistanceFromLatLonInM(lat1: number, lon1: number, lat2: number, lon2: number) {
-  var R = 6371e3; // Radius of the earth in m
-  var dLat = deg2rad(lat2-lat1);  
-  var dLon = deg2rad(lon2-lon1); 
-  var a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  var d = R * c; 
-  return d;
+const DOCTYPE = "ATS Attendance";
+const USER_DOCTYPE = "ATS User";
+
+/** Great-circle distance in metres. */
+function distanceInMetres(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function deg2rad(deg: number) {
-  return deg * (Math.PI/180)
+/** Frappe datetimes are `YYYY-MM-DD HH:mm:ss` in local time. */
+function frappeNow(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
 }
 
-function mapFrappeFields(a: any) {
-  return {
-    ...a,
-    employeeId: a.employeeid || a.employeeId,
-    checkInTime: a.checkintime || a.checkInTime,
-    checkOutTime: a.checkouttime || a.checkOutTime,
-    gpsLocation: a.gpslocation || a.gpsLocation,
-    workingHours: a.workinghours !== undefined ? a.workinghours : a.workingHours
-  };
+function parseFrappeDate(value: string | undefined): number {
+  if (!value) return NaN;
+  // Safari will not parse a space-separated datetime; normalise to ISO first.
+  return new Date(String(value).replace(" ", "T")).getTime();
+}
+
+async function withEmployeeNames(records: any[]): Promise<any[]> {
+  if (records.length === 0) return records;
+  const users = toAppList(USER_DOCTYPE, await getFrappeDocs(USER_DOCTYPE));
+  const byId = new Map(users.map((u: any) => [u._id, u]));
+
+  return records.map((item: any) => {
+    const emp = byId.get(item.employeeId);
+    return {
+      ...item,
+      checkInTime: item.checkInTime || item.createdAt,
+      employeeName: emp?.name || "Unknown Employee",
+      employeeEmail: emp?.email || "",
+    };
+  });
 }
 
 export async function checkIn(req: Request, res: Response): Promise<void> {
@@ -35,59 +54,66 @@ export async function checkIn(req: Request, res: Response): Promise<void> {
   const todayStr = new Date().toISOString().split("T")[0];
 
   try {
-    const rawAttendance = await getFrappeDocs("ATS Attendance");
-    const allAttendance = rawAttendance.map(mapFrappeFields);
-    const existing = allAttendance.find((a: any) => a.employeeId === user.id && a.date === todayStr);
-    
+    const all = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE));
+    const existing = all.find((a: any) => a.employeeId === user.id && a.date === todayStr);
+
     if (existing) {
-      existing._id = existing.name;
       res.status(400).json({ message: "You are already checked in for today!", attendance: existing });
       return;
     }
 
     const { gpsLocation } = req.body;
+    const settings = await loadSettings();
 
-    // Geo-fencing logic
-    const config = await getFrappeDoc("ATS Settings", "ATS Settings");
-    
-    if (config && config.geofenceenabled) {
+    if (settings.geofenceEnabled) {
       if (!gpsLocation || gpsLocation === "Unknown") {
-         res.status(400).json({ message: "Location required for check-in when geofencing is enabled." });
-         return;
+        res.status(400).json({ message: "Location required for check-in when geofencing is enabled." });
+        return;
       }
-      
-      const parts = gpsLocation.split(",");
-      if (parts.length === 2) {
-        const lat = parseFloat(parts[0].trim());
-        const lon = parseFloat(parts[1].trim());
-        const targetLat = parseFloat(config.geofencelatitude);
-        const targetLon = parseFloat(config.geofencelongitude);
-        
-        if (!isNaN(targetLat) && !isNaN(targetLon)) {
-          const distance = getDistanceFromLatLonInM(lat, lon, targetLat, targetLon);
-          if (distance > 5) { 
-             res.status(400).json({ message: `You must be within 5 meters from the Store Radius.` });
-             return;
-          }
+
+      const [rawLat, rawLon] = String(gpsLocation).split(",");
+      const lat = parseFloat(rawLat);
+      const lon = parseFloat(rawLon);
+      const targetLat = Number(settings.geofenceLatitude);
+      const targetLon = Number(settings.geofenceLongitude);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        res.status(400).json({ message: "Could not read your location. Please try again." });
+        return;
+      }
+
+      if (Number.isFinite(targetLat) && Number.isFinite(targetLon)) {
+        // The radius is configurable and defaults to 100 m. It was hard-coded at 5 m,
+        // which is tighter than consumer GPS accuracy, so check-in was near-impossible.
+        const radius = settings.geofenceRadius;
+        const distance = distanceInMetres(lat, lon, targetLat, targetLon);
+
+        if (distance > radius) {
+          res.status(400).json({
+            message: `You are about ${Math.round(distance)} m from the studio. Check-in is allowed within ${radius} m.`,
+          });
+          return;
         }
       }
     }
 
-    const now = new Date();
-    const nowFormatted = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19).replace('T', ' ');
-    let record = await createFrappeDoc("ATS Attendance", {
-      employeeid: user.id,
-      checkintime: nowFormatted,
-      gpslocation: gpsLocation || "34.0522, -118.2437",
-      date: todayStr,
-      status: "Checked In",
-      workinghours: 0
-    });
+    const nowFormatted = frappeNow();
+    const record = toApp<any>(
+      DOCTYPE,
+      await createFrappeDoc(
+        DOCTYPE,
+        toFrappe(DOCTYPE, {
+          employeeId: user.id,
+          checkInTime: nowFormatted,
+          gpsLocation: gpsLocation || "Unknown",
+          date: todayStr,
+          status: "Checked In",
+          workingHours: 0,
+        })
+      )
+    );
 
-    if (record) record._id = record.name;
-    record = mapFrappeFields(record);
     record.checkInTime = record.checkInTime || nowFormatted;
-
     res.status(201).json({ message: "Checked in successfully!", attendance: record });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to check in" });
@@ -99,42 +125,48 @@ export async function checkOut(req: Request, res: Response): Promise<void> {
   const todayStr = new Date().toISOString().split("T")[0];
 
   try {
-    const rawAttendance = await getFrappeDocs("ATS Attendance");
-    const allAttendance = rawAttendance.map(mapFrappeFields);
-    const existing = allAttendance.find((a: any) => a.employeeId === user.id && a.date === todayStr && a.status === "Checked In");
+    const all = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE));
+    const existing = all.find(
+      (a: any) => a.employeeId === user.id && a.date === todayStr && a.status === "Checked In"
+    );
 
     if (!existing) {
-      res.status(400).json({ message: "No active check-in session found for today. Please check in first!" });
+      res.status(400).json({
+        message: "No active check-in session found for today. Please check in first!",
+      });
       return;
     }
 
     const now = new Date();
-    const nowFormatted = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19).replace('T', ' ');
-    
-    // Fallback to replacing T with space if from frappe format or using raw iso string
-    const inTimeStr = (existing.checkInTime || existing.creation || now.toISOString()).replace(' ', 'T');
-    const inTime = new Date(inTimeStr).getTime();
-    const outTime = now.getTime();
-    
-    let hours = 0;
-    if (!isNaN(inTime)) {
-      hours = Number(((outTime - inTime) / (1000 * 60 * 60)).toFixed(2));
-    }
-    
-    if (hours < 8) {
-      res.status(400).json({ message: `Minimum 8 hours required for check out. You have only worked ${hours} hours.` });
+    const inTime = parseFrappeDate(existing.checkInTime || existing.createdAt);
+    const hours = Number.isFinite(inTime)
+      ? Number(((now.getTime() - inTime) / (1000 * 60 * 60)).toFixed(2))
+      : 0;
+
+    const settings = await loadSettings();
+    const minimumHours = settings.minimumShiftHours;
+
+    if (minimumHours > 0 && hours < minimumHours) {
+      res.status(400).json({
+        message: `A shift must be at least ${minimumHours} hours before checking out. You have worked ${hours} hours so far.`,
+      });
       return;
     }
 
-    let updated = await updateFrappeDoc("ATS Attendance", existing.name, {
-      checkouttime: nowFormatted,
-      status: "Checked Out",
-      workinghours: hours
-    });
+    const nowFormatted = frappeNow();
+    const updated = toApp<any>(
+      DOCTYPE,
+      await updateFrappeDoc(
+        DOCTYPE,
+        existing._id,
+        toFrappe(DOCTYPE, {
+          checkOutTime: nowFormatted,
+          status: "Checked Out",
+          workingHours: hours,
+        })
+      )
+    );
 
-    if (updated) updated._id = updated.name;
-    updated = mapFrappeFields(updated);
-    
     updated.checkOutTime = updated.checkOutTime || nowFormatted;
     updated.workingHours = updated.workingHours !== undefined ? updated.workingHours : hours;
 
@@ -149,30 +181,12 @@ export async function getAttendance(req: Request, res: Response): Promise<void> 
   const { date } = req.query;
 
   try {
-    const rawList = await getFrappeDocs("ATS Attendance");
-    let list = rawList.map(mapFrappeFields);
-    
-    if (date) {
-      list = list.filter((a: any) => a.date === date);
-    }
+    let list = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE));
 
-    if (user.role !== "Admin") {
-      list = list.filter((a: any) => a.employeeId === user.id);
-    }
+    if (date) list = list.filter((a: any) => a.date === date);
+    if (user.role !== "Admin") list = list.filter((a: any) => a.employeeId === user.id);
 
-    const users = await getFrappeDocs("ATS User");
-    const enriched = list.map((item: any) => {
-      item._id = item.name;
-      item.checkInTime = item.checkInTime || item.creation;
-      const emp = users.find((u: any) => u.name === item.employeeId);
-      return {
-        ...item,
-        employeeName: emp ? (emp.name1 || emp.name) : "Unknown Employee",
-        employeeEmail: emp ? emp.email : ""
-      };
-    });
-
-    res.status(200).json(enriched);
+    res.status(200).json(await withEmployeeNames(list));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load attendance list" });
   }
@@ -182,27 +196,12 @@ export async function getAttendanceHistory(req: Request, res: Response): Promise
   const user = (req as any).user;
 
   try {
-    const rawList = await getFrappeDocs("ATS Attendance");
-    let list = rawList.map(mapFrappeFields);
-    
-    if (user.role !== "Admin") {
-      list = list.filter((a: any) => a.employeeId === user.id);
-    }
+    let list = toAppList(DOCTYPE, await getFrappeDocs(DOCTYPE));
+    if (user.role !== "Admin") list = list.filter((a: any) => a.employeeId === user.id);
 
     list.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const users = await getFrappeDocs("ATS User");
-    const enriched = list.map((item: any) => {
-      item._id = item.name;
-      item.checkInTime = item.checkInTime || item.creation;
-      const emp = users.find((u: any) => u.name === item.employeeId);
-      return {
-        ...item,
-        employeeName: emp ? (emp.name1 || emp.name) : "Unknown Employee"
-      };
-    });
-
-    res.status(200).json(enriched);
+    res.status(200).json(await withEmployeeNames(list));
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to fetch history" });
   }

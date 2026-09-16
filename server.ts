@@ -38,12 +38,17 @@ if (process.env.NODE_ENV !== "production") {
 } else {
   const distPath = path.join(process.cwd(), "dist");
   app.use(express.static(distPath));
-  // Note: Vercel handles the SPA fallback via vercel.json rewrites, 
+
+  // An unmatched /api path must answer 404. This used to fall through without ever
+  // writing a response, so a mistyped route hung until the gateway timed it out.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "API route not found" });
+  });
+
+  // Note: Vercel handles the SPA fallback via vercel.json rewrites,
   // but we keep this here for local production testing.
-  app.get("*", (req, res) => {
-    if (!req.path.startsWith("/api")) {
-      res.sendFile(path.join(distPath, "index.html"));
-    }
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
   });
 }
 

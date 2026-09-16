@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, Customer } from "../types";
+import { AuthUser, Customer, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
+import { formatDate } from "../lib/datetime";
 import { Users, Search, Plus, Edit2, Trash2, X, Save, Calendar, Sparkles, FolderOpen, Tag, Phone } from "lucide-react";
 
 interface CustomersViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function CustomersView({ user }: CustomersViewProps) {
+export default function CustomersView({ user, showToast }: CustomersViewProps) {
   const isAdmin = user.role === "Admin";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +56,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
       const data = await apiFetch(`/customers/${cust._id}`);
       setSelectedCustomer(data);
     } catch (err: any) {
-      alert("Failed to load layout portfolio for this customer.");
+      showToast(err.message || "Could not load this customer's history.", "error");
     } finally {
       setLoadingDetails(false);
     }
@@ -90,14 +93,14 @@ export default function CustomersView({ user }: CustomersViewProps) {
       }
       await fetchCustomers();
     } catch (err: any) {
-      alert(err.message || "Failed to delete customer");
+      showToast(err.message || "Failed to delete customer.", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !mobile) {
-      alert("Name and Mobile are required fields");
+      showToast("Name and mobile number are required.", "warning");
       return;
     }
 
@@ -118,7 +121,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
       setIsModalOpen(false);
       await fetchCustomers();
     } catch (err: any) {
-      alert(err.message || "Operation failed.");
+      showToast(err.message || "Operation failed.", "error");
     }
   };
 
@@ -208,7 +211,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
                       <div className="h-4 w-px bg-slate-850" />
                       <div>
                         <span className="text-[9px] text-slate-500 uppercase tracking-wider block font-bold leading-none mb-0.5">Total Spendings</span>
-                        <span className="text-amber-500 font-extrabold leading-none block">${(cust.totalSpending || 0).toFixed(2)}</span>
+                        <span className="text-amber-500 font-extrabold leading-none block">{formatCurrency(cust.totalSpending)}</span>
                       </div>
                     </div>
 
@@ -291,7 +294,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
                         </span>
                         <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1 font-sans">
                           <Calendar className="w-3 h-3" />
-                          {new Date(hist.serviceDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}
+                          {formatDate(hist.serviceDate)}
                         </span>
                       </div>
 
@@ -305,7 +308,7 @@ export default function CustomersView({ user }: CustomersViewProps) {
 
                       <div className="border-t border-slate-900 pt-2 flex justify-between items-center text-[10px] text-slate-500">
                         <span>Artist: <strong className="text-slate-400">{hist.employeeName}</strong></span>
-                        <span className="font-extrabold text-amber-500 text-xs">${hist.amount.toFixed(2)}</span>
+                        <span className="font-extrabold text-amber-500 text-xs">{formatCurrency(hist.amount)}</span>
                       </div>
                     </div>
                   ))}

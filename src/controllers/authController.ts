@@ -1,27 +1,60 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { getFrappeDocs, frappeLogin, getFrappeDoc } from "../config/frappeClient";
-
-const JWT_SECRET = process.env.JWT_SECRET || "aquarius_tattoo_studio_secret_key_13579";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "aquarius_tattoo_studio_refresh_key_24680";
+import { toApp, toAppList } from "../config/fieldMap";
+import { JWT_SECRET, JWT_REFRESH_SECRET, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL } from "../config/secrets";
 
 const USER_DOCTYPE = "ATS User";
-const SETTINGS_DOCTYPE = "ATS Settings";
 
-function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+const ADMINISTRATOR_PROFILE = {
+  _id: "Administrator",
+  name: "Administrator",
+  email: "Administrator",
+  role: "Admin" as const,
+  status: "Active",
+};
+
+function signTokens(user: any) {
+  const accessToken = jwt.sign(
+    {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profileImage: user.profileImage,
+    },
+    JWT_SECRET,
+    { expiresIn: ACCESS_TOKEN_TTL } as jwt.SignOptions
+  );
+
+  const refreshToken = jwt.sign({ id: user._id, role: user.role }, JWT_REFRESH_SECRET, {
+    expiresIn: REFRESH_TOKEN_TTL,
+  } as jwt.SignOptions);
+
+  return { accessToken, refreshToken };
+}
+
+/**
+ * Verify a password against the stored value.
+ *
+ * Stored passwords are bcrypt hashes, but this compared them to the submitted
+ * password with `!==`, so no account created through the app could ever log in. The
+ * plaintext branch is retained only for profiles that predate hashing, and those are
+ * upgraded to a hash on their next successful login.
+ */
+function verifyPassword(stored: string | undefined, submitted: string): { ok: boolean; needsRehash: boolean } {
+  if (!stored) return { ok: false, needsRehash: false };
+
+  if (/^\$2[aby]\$/.test(stored)) {
+    return { ok: bcrypt.compareSync(submitted, stored), needsRehash: false };
+  }
+
+  return { ok: stored === submitted, needsRehash: stored === submitted };
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
-  const { loginId, password, latitude, longitude } = req.body;
+  const { loginId, password } = req.body;
 
   if (!loginId || !password) {
     res.status(400).json({ message: "Email/Username and password are required" });
@@ -29,85 +62,64 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    // 1. Try Frappe Native Login first (this handles 'Administrator' and other real users)
     const isValidFrappeLogin = await frappeLogin(loginId, password);
 
-    // 1.5. Resolve username to email if necessary
-    // If the user logs in with a username (like 'Owner'), find their real email from Frappe User doctype
+    // A username may be supplied instead of an email; resolve it where we can.
     let actualEmail = loginId;
     try {
       const frappeUsers = await getFrappeDocs("User", { username: loginId });
-      if (frappeUsers && frappeUsers.length > 0) {
+      if (frappeUsers.length > 0) {
         actualEmail = frappeUsers[0].email || frappeUsers[0].name;
       }
-    } catch (e) {
-      // Ignore errors here and just fallback to using loginId
+    } catch {
+      // Not fatal — fall back to the supplied identifier.
     }
 
-    // 2. Fetch User Profile from ATS User Doctype
-    // Search for the user by resolved email first, then by name, then by original loginId
-    let users = await getFrappeDocs(USER_DOCTYPE, { email: actualEmail });
-    if (users.length === 0) {
-       users = await getFrappeDocs(USER_DOCTYPE, { name: actualEmail });
-    }
-    if (users.length === 0 && actualEmail !== loginId) {
-       users = await getFrappeDocs(USER_DOCTYPE, { email: loginId });
-    }
-    if (users.length === 0 && actualEmail !== loginId) {
-       users = await getFrappeDocs(USER_DOCTYPE, { name: loginId });
-    }
-    let user = users.length > 0 ? users[0] : null;
+    const allUsers = toAppList(USER_DOCTYPE, await getFrappeDocs(USER_DOCTYPE));
+    const candidates = [actualEmail, loginId].map((v) => String(v).toLowerCase());
+    let user: any =
+      allUsers.find((u: any) => candidates.includes(String(u.email || "").toLowerCase())) ||
+      allUsers.find((u: any) => candidates.includes(String(u._id || "").toLowerCase())) ||
+      null;
 
-    // Support Administrator fallback if they haven't created an ATS User for the Admin yet
-    if (isValidFrappeLogin && !user && loginId.toLowerCase() === "administrator") {
-      user = {
-        name: "Administrator",
-        email: "Administrator",
-        role: "Admin",
-        status: "Active",
-        _id: "Administrator"
-      };
-    } else if (!isValidFrappeLogin && !user) {
-      // If neither Frappe login worked nor an ATS User exists
-      res.status(401).json({ message: "Invalid credentials" });
-      return;
-    } else if (!isValidFrappeLogin && user) {
-       // If Frappe login failed but ATS User exists, we can optionally check the raw password field in ATS User if they didn't create a real Frappe user
-       // Note: In production, they SHOULD be real Frappe users. For now, we fallback to raw check if needed, or just reject.
-       if (user.password !== password) {
-          res.status(401).json({ message: "Invalid credentials" });
-          return;
-       }
+    if (isValidFrappeLogin && !user && String(loginId).toLowerCase() === "administrator") {
+      user = { ...ADMINISTRATOR_PROFILE };
+    } else if (!isValidFrappeLogin) {
+      // Frappe rejected the credentials, so fall back to the ATS profile's own password.
+      if (!user) {
+        res.status(401).json({ message: "Invalid credentials" });
+        return;
+      }
+
+      const { ok, needsRehash } = verifyPassword(user.password, password);
+      if (!ok) {
+        res.status(401).json({ message: "Invalid credentials" });
+        return;
+      }
+
+      if (needsRehash) {
+        try {
+          const { updateFrappeDoc } = await import("../config/frappeClient");
+          await updateFrappeDoc(USER_DOCTYPE, user._id, {
+            password: bcrypt.hashSync(password, bcrypt.genSaltSync(10)),
+          });
+        } catch (error: any) {
+          console.error("[auth] Failed to upgrade stored password to a hash:", error.message);
+        }
+      }
     }
 
     if (!user) {
-       res.status(401).json({ message: "User profile not found." });
-       return;
+      res.status(401).json({ message: "User profile not found." });
+      return;
     }
-
-    // Map Frappe 'name' to '_id' for frontend compatibility
-    user._id = user.name || user._id;
 
     if (user.status === "Inactive") {
       res.status(403).json({ message: "Your account is deactivated. Contact Admin." });
       return;
     }
 
-
-
-    // Generate accessToken
-    const accessToken = jwt.sign(
-      { id: user._id, name: user.name, email: user.email, role: user.role, profileImage: user.profileImage },
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    // Generate refreshToken
-    const refreshToken = jwt.sign(
-      { id: user._id, role: user.role },
-      JWT_REFRESH_SECRET,
-      { expiresIn: "7d" }
-    );
+    const { accessToken, refreshToken } = signTokens(user);
 
     res.status(200).json({
       message: "Login successful",
@@ -115,22 +127,22 @@ export async function login(req: Request, res: Response): Promise<void> {
       refreshToken,
       user: {
         id: user._id,
-        name: user.name || user.email, // fallback if name is empty
+        name: user.name || user.email,
         email: user.email,
         role: user.role,
         phone: user.phone,
         status: user.status,
         profileImage: user.profileImage,
-        createdAt: user.creation
-      }
+        createdAt: user.createdAt,
+      },
     });
   } catch (error: any) {
-    console.error("[Auth] Login controller error encountered:", error);
+    console.error("[auth] Login controller error encountered:", error);
     res.status(500).json({ message: error.message || "Server authentication error" });
   }
 }
 
-export async function logout(req: Request, res: Response): Promise<void> {
+export async function logout(_req: Request, res: Response): Promise<void> {
   res.status(200).json({ message: "Logout successful, tokens invalidated." });
 }
 
@@ -144,36 +156,19 @@ export async function refresh(req: Request, res: Response): Promise<void> {
 
   try {
     const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as any;
-    
-    let user;
-    if (decoded.id === "Administrator") {
-      user = { _id: "Administrator", name: "Administrator", email: "Administrator", role: "Admin", status: "Active" };
-    } else {
-      user = await getFrappeDoc(USER_DOCTYPE, decoded.id);
-      if (user) user._id = user.name;
-    }
+
+    const user =
+      decoded.id === "Administrator"
+        ? { ...ADMINISTRATOR_PROFILE }
+        : toApp<any>(USER_DOCTYPE, await getFrappeDoc(USER_DOCTYPE, decoded.id));
 
     if (!user || user.status === "Inactive") {
       res.status(401).json({ message: "User not found or suspended" });
       return;
     }
 
-    const accessToken = jwt.sign(
-      { id: user._id, name: user.name, email: user.email, role: user.role, profileImage: user.profileImage },
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    const nextRefreshToken = jwt.sign(
-      { id: user._id, role: user.role },
-      JWT_REFRESH_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.status(200).json({
-      accessToken,
-      refreshToken: nextRefreshToken
-    });
+    const { accessToken, refreshToken } = signTokens(user);
+    res.status(200).json({ accessToken, refreshToken });
   } catch (error) {
     res.status(403).json({ message: "Expired or invalid refresh token" });
   }
@@ -187,13 +182,10 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    let user;
-    if (reqUser.id === "Administrator") {
-       user = { _id: "Administrator", name: "Administrator", email: "Administrator", role: "Admin", status: "Active" };
-    } else {
-       user = await getFrappeDoc(USER_DOCTYPE, reqUser.id);
-       if (user) user._id = user.name;
-    }
+    const user =
+      reqUser.id === "Administrator"
+        ? { ...ADMINISTRATOR_PROFILE }
+        : toApp<any>(USER_DOCTYPE, await getFrappeDoc(USER_DOCTYPE, reqUser.id));
 
     if (!user) {
       res.status(404).json({ message: "Profile not found" });
@@ -208,8 +200,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
       phone: user.phone,
       status: user.status,
       profileImage: user.profileImage,
-      createdAt: user.creation,
-      updatedAt: user.modified
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     });
   } catch (error: any) {
     res.status(500).json({ message: "Failed to retrieve profile data" });

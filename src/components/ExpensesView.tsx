@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { AuthUser, Expense } from "../types";
+import { AuthUser, Expense, ToastType } from "../types";
 import { apiFetch } from "../lib/api";
+import { formatCurrency } from "../lib/currency";
 import { Coins, Search, FileDown, Plus, CheckCircle, XCircle, Trash2, X, AlertCircle } from "lucide-react";
 
 interface ExpensesViewProps {
   user: AuthUser;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
-export default function ExpensesView({ user }: ExpensesViewProps) {
+export default function ExpensesView({ user, showToast }: ExpensesViewProps) {
   const isAdmin = user.role === "Admin";
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
       });
       await fetchExpenses();
     } catch (err: any) {
-      alert("Status change failed.");
+      showToast("Status change failed.", "error");
     }
   };
 
@@ -72,7 +74,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
       });
       await fetchExpenses();
     } catch (err: any) {
-      alert("Status change failed.");
+      showToast("Status change failed.", "error");
     }
   };
 
@@ -82,14 +84,14 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
       await apiFetch(`/expenses/${id}`, { method: "DELETE" });
       await fetchExpenses();
     } catch (err: any) {
-      alert(err.message || "Failed to delete");
+      showToast(err.message || "Failed to delete", "error");
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !amount) {
-      alert("Please fill in Title and Amount fields");
+      showToast("Please fill in Title and Amount fields", "error");
       return;
     }
 
@@ -110,7 +112,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
       setIsModalOpen(false);
       await fetchExpenses();
     } catch (err: any) {
-      alert(err.message || "Request failed");
+      showToast(err.message || "Request failed", "error");
     }
   };
 
@@ -217,13 +219,13 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
                         {exp.notes && (
                           <span className="text-slate-400 font-sans text-[11px] block mt-0.5 max-w-xs truncate">{exp.notes}</span>
                         )}
-                        <span className="text-[10px] text-slate-500 font-mono block mt-1">SubmitBy ID: {exp.employeeId}</span>
+                        <span className="text-[10px] text-slate-500 font-mono block mt-1">Submitted by {exp.employeeName || exp.employeeId}</span>
                       </td>
                       <td className="p-4">
                         <span className="text-slate-300 font-medium">{exp.category}</span>
                       </td>
                       <td className="p-4">
-                        <span className="text-sm font-bold text-white block">${exp.amount.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-white block">{formatCurrency(exp.amount)}</span>
                       </td>
                       <td className="p-4">
                         <span className="text-slate-400">{exp.date}</span>
@@ -321,7 +323,7 @@ export default function ExpensesView({ user }: ExpensesViewProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Billing Amount ($)</label>
+                  <label className="block text-[10px] text-slate-400 uppercase tracking-wide font-bold mb-1.5">Billing Amount (₹)</label>
                   <input
                     type="number"
                     step="0.01"
